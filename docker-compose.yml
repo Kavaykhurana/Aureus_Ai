@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  aureus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aureus-ai-command-center:latest
+    container_name: aureus-ai
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist the SQLite database file between container restarts
+      - aureus-data:/app/.data
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  aureus-data:
+    driver: local
