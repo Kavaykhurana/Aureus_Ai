@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Check, LockKeyhole, Save, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, LockKeyhole, Save, ShieldAlert, ShieldCheck, SlidersHorizontal, UserCheck, X } from "lucide-react";
 import { toast } from "sonner";
 import WorkspaceLayout from "@/components/WorkspaceLayout";
 import { api, type PolicyData } from "@/lib/api";
@@ -7,8 +7,9 @@ import { api, type PolicyData } from "@/lib/api";
 export default function PolicyCenter() {
   const [positionLimit, setPositionLimit] = useState(25);
   const [approvalVaR, setApprovalVaR] = useState(2.5);
+  const [complianceHardStop, setComplianceHardStop] = useState(true);
+  const [twoPersonApproval, setTwoPersonApproval] = useState(false);
   const [saved, setSaved] = useState(true);
-  const [healthScore, setHealthScore] = useState(94);
   const [policyVersion, setPolicyVersion] = useState("v2.4");
   const [loading, setLoading] = useState(true);
 
@@ -18,25 +19,79 @@ export default function PolicyCenter() {
       .then((data: PolicyData) => {
         setPositionLimit(data.positionLimit);
         setApprovalVaR(data.approvalVaR);
-        setHealthScore(data.healthScore);
-        setPolicyVersion(data.version);
+        setComplianceHardStop(data.complianceHardStop ?? true);
+        setTwoPersonApproval(data.twoPersonApproval ?? false);
+        setPolicyVersion(data.version || "v2.4");
         setSaved(true);
       })
       .catch(() => toast.error("Failed to load policy settings"))
       .finally(() => setLoading(false));
   }, []);
 
+  // Dynamic posture score that immediately recalculates when left-side values change
+  const calculatedHealthScore = useMemo(() => {
+    let score = 75;
+
+    // Compliance hard stop: critical rule (+15 if active, -30 if bypassed)
+    if (complianceHardStop) {
+      score += 15;
+    } else {
+      score -= 30;
+    }
+
+    // Two-person approval adds enterprise dual-operator rigor (+6)
+    if (twoPersonApproval) {
+      score += 6;
+    }
+
+    // Single-position limit: 5% strict (+7), 25% baseline (+0), 50% permissive (-10)
+    score += Math.round((25 - positionLimit) * 0.38);
+
+    // Approval VaR threshold: 1.0% strict (+6), 2.5% baseline (+0), 5.0% permissive (-8)
+    score += Math.round((2.5 - approvalVaR) * 3.2);
+
+    return Math.max(30, Math.min(99, score));
+  }, [positionLimit, approvalVaR, complianceHardStop, twoPersonApproval]);
+
+  const postureInfo = useMemo(() => {
+    if (calculatedHealthScore >= 90) {
+      return {
+        label: "Healthy configuration",
+        description: "All critical rules are active and synchronized across the agent fabric.",
+        color: "#e06c43",
+        tone: "decision-badge-approved",
+        icon: ShieldCheck,
+      };
+    }
+    if (calculatedHealthScore >= 75) {
+      return {
+        label: "Balanced configuration",
+        description: "Standard risk parameters active. Balanced capital velocity with operator checkpoints.",
+        color: "#a47148",
+        tone: "decision-badge-quiet",
+        icon: ShieldCheck,
+      };
+    }
+    return {
+      label: "Permissive posture",
+      description: "Warning: relaxed thresholds allow higher concentration risk and reduce automated checkpoints.",
+      color: "#c2410c",
+      tone: "decision-badge-rejected",
+      icon: ShieldAlert,
+    };
+  }, [calculatedHealthScore]);
+
   async function savePolicy() {
     try {
       await api.savePolicies({
         positionLimit,
         approvalVaR,
-        complianceHardStop: true,
-        twoPersonApproval: false,
+        complianceHardStop,
+        twoPersonApproval,
       });
       setSaved(true);
       toast.success("Policy set saved", {
-        description: "New guardrail thresholds will apply to the next analysis.",
+        description: `New guardrail thresholds (${calculatedHealthScore}% posture) applied to live agents.`,
       });
     } catch {
       toast.error("Failed to save policy");
@@ -58,7 +113,7 @@ export default function PolicyCenter() {
               </div>
               <h2 className="panel-title">Guardrail parameters</h2>
             </div>
-            <span className="decision-badge decision-badge-approved">
+            <span className={`decision-badge ${postureInfo.tone}`}>
               {loading ? "…" : `${policyVersion} active`}
             </span>
           </div>
@@ -120,9 +175,25 @@ export default function PolicyCenter() {
                 <label>Compliance hard stop</label>
                 <p>Never allow restricted-list or sanctions conflicts to proceed.</p>
               </div>
-              <div className="toggle-on">
-                <Check size={13} /> On
-              </div>
+              <button
+                type="button"
+                className={complianceHardStop ? "toggle-on cursor-pointer" : "toggle-off cursor-pointer"}
+                onClick={() => {
+                  setComplianceHardStop(!complianceHardStop);
+                  setSaved(false);
+                }}
+                aria-label="Toggle compliance hard stop"
+              >
+                {complianceHardStop ? (
+                  <>
+                    <Check size={13} /> On
+                  </>
+                ) : (
+                  <>
+                    <X size={13} /> Off
+                  </>
+                )}
+              </button>
             </div>
 
             <div className="policy-toggle-row">
@@ -131,15 +202,21 @@ export default function PolicyCenter() {
                 <p>Escalate trades above $50,000 notional to a second operator.</p>
               </div>
               <button
-                className="toggle-off"
-                onClick={() =>
-                  toast("Two-person approval", {
-                    description:
-                      "This policy is available to enable in your enterprise configuration.",
-                  })
-                }
+                type="button"
+                className={twoPersonApproval ? "toggle-on cursor-pointer" : "toggle-off cursor-pointer"}
+                onClick={() => {
+                  setTwoPersonApproval(!twoPersonApproval);
+                  setSaved(false);
+                }}
+                aria-label="Toggle two-person approval"
               >
-                Off
+                {twoPersonApproval ? (
+                  <>
+                    <UserCheck size={13} /> On
+                  </>
+                ) : (
+                  "Off"
+                )}
               </button>
             </div>
           </div>
@@ -148,7 +225,7 @@ export default function PolicyCenter() {
             <span className="font-mono text-[9px] text-[#a18e87]">
               {saved ? "All changes saved to database" : "Unsaved changes — save to apply"}
             </span>
-            <button className="primary-button min-h-[36px] px-4" onClick={savePolicy}>
+            <button className="primary-button min-h-[36px] px-4 cursor-pointer" onClick={savePolicy}>
               <Save size={14} /> Save policy set
             </button>
           </div>
@@ -158,35 +235,57 @@ export default function PolicyCenter() {
           <div className="panel-header">
             <div>
               <div className="eyebrow">
-                <ShieldCheck size={11} /> Policy health
+                <postureInfo.icon size={11} /> Policy health
               </div>
               <h2 className="panel-title">Current posture</h2>
             </div>
           </div>
           <div className="policy-health">
-            <div className="health-score">
-              {loading ? "—" : healthScore}
+            <div className="health-score" style={{ color: postureInfo.color }}>
+              {loading ? "—" : calculatedHealthScore}
               <span>%</span>
             </div>
             <div className="mt-2 text-[12px] font-semibold text-[#4d413b]">
-              Healthy configuration
+              {postureInfo.label}
             </div>
             <div className="mt-1 text-[11px] leading-5 text-[#8e7970]">
-              All critical rules are active and synchronized across the agent fabric.
+              {postureInfo.description}
             </div>
           </div>
           <div className="mt-5 space-y-3 px-5 pb-5">
             <div className="health-row">
               <span>
-                <Check size={13} /> Restricted list
+                {complianceHardStop ? <Check size={13} /> : <X size={13} className="text-[#c2410c]" />} Restricted list
               </span>
-              <b>Passed</b>
+              <b style={{ color: complianceHardStop ? "#6d846a" : "#c2410c" }}>
+                {complianceHardStop ? "Enforced" : "Bypassed"}
+              </b>
             </div>
             <div className="health-row">
               <span>
                 <Check size={13} /> Human checkpoint
               </span>
-              <b>Armed</b>
+              <b>
+                {twoPersonApproval
+                  ? "Dual Operator"
+                  : approvalVaR <= 2.5
+                  ? "Strict Armed"
+                  : "Permissive"}
+              </b>
+            </div>
+            <div className="health-row">
+              <span>
+                <SlidersHorizontal size={13} /> Position ceiling
+              </span>
+              <b>
+                {positionLimit <= 20 ? "Conservative" : positionLimit <= 35 ? "Moderate" : "Permissive"} ({positionLimit}%)
+              </b>
+            </div>
+            <div className="health-row">
+              <span>
+                <ShieldCheck size={13} /> VaR threshold
+              </span>
+              <b>{approvalVaR.toFixed(1)}% 1-day</b>
             </div>
             <div className="health-row">
               <span>

@@ -54,11 +54,41 @@ export default function Exceptions() {
         current.map((item) => (item.id === id ? { ...item, status: "Resolved" } : item)),
       );
       setOpenCount((c) => Math.max(0, c - 1));
+      setResolvedToday((r) => r + 1);
       toast("Exception resolved", {
         description: `${id} has been marked resolved and added to the audit trail.`,
       });
     } catch {
       toast.error("Failed to resolve exception");
+    }
+  }
+
+  async function dismiss(id: string) {
+    try {
+      await api.dismissException(id);
+      setItems((current) =>
+        current.map((item) => (item.id === id ? { ...item, status: "Dismissed" } : item)),
+      );
+      setOpenCount((c) => Math.max(0, c - 1));
+      toast("Exception dismissed", {
+        description: `${id} dismissed and recorded in audit log.`,
+      });
+    } catch {
+      toast.error("Failed to dismiss exception");
+    }
+  }
+
+  function handleInvestigate(item: ExceptionItem) {
+    if (item.ticker) {
+      setLocation(`/stock/${item.ticker}`);
+    } else if (item.owner === "Risk") {
+      setLocation("/risk");
+    } else if (item.owner === "Guardrail" || item.owner === "Compliance") {
+      setLocation("/policies");
+    } else if (item.owner === "Research") {
+      setLocation("/history");
+    } else {
+      setLocation("/");
     }
   }
 
@@ -153,7 +183,7 @@ export default function Exceptions() {
             </h2>
           </div>
           <div className="flex flex-wrap gap-2">
-            {["All", "Open", "High", "Medium", "Low", "Resolved"].map((item) => (
+            {["All", "Open", "High", "Medium", "Low", "Resolved", "Dismissed"].map((item) => (
               <button
                 key={item}
                 className={`audit-filter ${filter === item ? "audit-filter-active" : ""}`}
@@ -195,7 +225,7 @@ export default function Exceptions() {
                     <span>·</span>
                     <span>{item.owner} owner</span>
                     <span>·</span>
-                    <span>{item.status}</span>
+                    <span className={item.status === "Open" ? "text-[#e06c43] font-semibold" : ""}>{item.status}</span>
                   </div>
                 </div>
                 <div className="ml-auto flex flex-col gap-2 sm:flex-row">
@@ -206,29 +236,20 @@ export default function Exceptions() {
                   )}
                   <button
                     className="secondary-button"
-                    onClick={() =>
-                      item.owner === "Risk"
-                        ? setLocation("/risk")
-                        : item.owner === "Guardrail"
-                          ? setLocation("/")
-                          : toast(`${item.id} routed`, {
-                              description: "Supporting workspace opened for investigation.",
-                            })
-                    }
+                    onClick={() => handleInvestigate(item)}
                   >
                     <ArrowRight size={13} /> Investigate
                   </button>
-                  <button
-                    className="icon-button icon-button-small"
-                    aria-label={`Dismiss ${item.id}`}
-                    onClick={() =>
-                      toast(`${item.id} dismissed`, {
-                        description: "Dismissal requires a reason in the full workflow.",
-                      })
-                    }
-                  >
-                    <X size={14} />
-                  </button>
+                  {item.status === "Open" && (
+                    <button
+                      className="icon-button icon-button-small"
+                      aria-label={`Dismiss ${item.id}`}
+                      title="Dismiss exception"
+                      onClick={() => dismiss(item.id)}
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}

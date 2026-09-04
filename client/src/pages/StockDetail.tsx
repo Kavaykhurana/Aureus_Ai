@@ -32,7 +32,28 @@ export default function StockDetail() {
       .then(setData)
       .catch(() => toast.error(`Failed to load ${ticker} detail`))
       .finally(() => setLoading(false));
+
+    api
+      .getWatchlist()
+      .then((wl) => {
+        const item = wl.symbols.find((s) => s.ticker === ticker);
+        if (item) setWatching(item.alertArmed);
+      })
+      .catch(() => {});
   }, [ticker]);
+
+  async function handleToggleWatchlist() {
+    try {
+      const res = await api.toggleWatchlistAlert(ticker);
+      setWatching(res.alertArmed);
+      toast(
+        res.alertArmed ? `${ticker} added to watchlist` : `${ticker} removed from watchlist`,
+        { description: "Watchlist preference updated." },
+      );
+    } catch {
+      toast.error("Failed to update watchlist");
+    }
+  }
 
   const priceChange = data?.change ?? 0;
   const isUp = priceChange >= 0;
@@ -49,13 +70,7 @@ export default function StockDetail() {
         </button>
         <button
           className={`secondary-button ${watching ? "secondary-button-active" : ""}`}
-          onClick={() => {
-            setWatching(!watching);
-            toast(
-              watching ? `${ticker} removed from watchlist` : `${ticker} added to watchlist`,
-              { description: "Watchlist preference updated." },
-            );
-          }}
+          onClick={handleToggleWatchlist}
         >
           <Star size={14} fill={watching ? "currentColor" : "none"} />{" "}
           {watching ? "Watching" : "Add to watchlist"}
@@ -189,9 +204,9 @@ export default function StockDetail() {
             <button
               className="primary-button min-h-[34px] px-3"
               onClick={() => {
-                setLocation("/");
-                toast("Analysis ready", {
-                  description: `Command center is ready to run a fresh ${ticker} analysis.`,
+                setLocation(`/?ticker=${ticker}`);
+                toast("Analysis launched", {
+                  description: `Running fresh 5-agent pipeline for ${ticker}.`,
                 });
               }}
             >

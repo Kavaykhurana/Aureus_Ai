@@ -28,9 +28,14 @@ router.get("/", (_req: Request, res: Response) => {
   const highImpactCount = rows.filter((r) => r.impact === "High").length;
   const trackedCount = rows.filter((r) => r.alert_armed === 1).length;
 
+  // Derive next catalyst dynamically from the first entry
+  const next = rows[0];
+  const nextCatalyst = next ? "01 day" : "—";
+  const nextCatalystName = next ? `${next.ticker} ${next.title.split(" ").slice(0, 2).join(" ")}` : "No upcoming events";
+
   res.json({
-    nextCatalyst: "01 day",
-    nextCatalystName: "NVDA earnings",
+    nextCatalyst,
+    nextCatalystName,
     highImpactCount,
     trackedCount,
     lastRefresh: "2m",
@@ -40,6 +45,7 @@ router.get("/", (_req: Request, res: Response) => {
     })),
   });
 });
+
 
 /**
  * POST /api/earnings/toggle
@@ -72,6 +78,42 @@ router.post("/toggle", (req: Request, res: Response) => {
   }
 
   res.json({ success: true, ticker: sym, alertArmed: Boolean(nextState) });
+});
+
+/**
+ * POST /api/earnings/add
+ * Adds a new custom catalyst to the event radar.
+ */
+router.post("/add", (req: Request, res: Response) => {
+  const { ticker, title, date_str, timing = "Post-market", impact = "High", move_str = "±6.5%" } = req.body;
+  if (!ticker || !title || !date_str) {
+    res.status(400).json({ error: "ticker, title, and date_str are required" });
+    return;
+  }
+  const sym = String(ticker).toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10);
+  const id = `cat-${sym.toLowerCase()}-${Date.now().toString().slice(-4)}`;
+  const tone = impact === "High" ? "orange" : impact === "Medium" ? "gold" : "green";
+  const now = new Date().toISOString();
+
+  db.prepare(`
+    INSERT INTO catalysts (id, date_str, ticker, title, timing, impact, move_str, tone, alert_armed, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+  `).run(id, String(date_str).slice(0, 20), sym, String(title).slice(0, 100), String(timing).slice(0, 30), String(impact), String(move_str), tone, now);
+
+  res.json({
+    success: true,
+    catalyst: {
+      id,
+      date_str,
+      ticker: sym,
+      title,
+      timing,
+      impact,
+      move_str,
+      tone,
+      alertArmed: true,
+    },
+  });
 });
 
 export default router;

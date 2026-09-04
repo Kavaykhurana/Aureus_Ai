@@ -9,16 +9,26 @@ import {
   ShieldAlert,
   SlidersHorizontal,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import WorkspaceLayout from "@/components/WorkspaceLayout";
 import { api, type RiskData } from "@/lib/api";
 
 export default function RiskMatrix() {
+  const [, setLocation] = useLocation();
   const [scenario, setScenario] = useState("Base case");
   const [threshold, setThreshold] = useState(2.5);
   const [running, setRunning] = useState(false);
   const [data, setData] = useState<RiskData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [simulationResult, setSimulationResult] = useState<{
+    scenario: string;
+    projectedDrawdownPct: number;
+    threshold: number;
+    opensCheckpoint: boolean;
+    message: string;
+    timestamp: string;
+  } | null>(null);
 
   function loadRisk() {
     setLoading(true);
@@ -37,8 +47,18 @@ export default function RiskMatrix() {
     setRunning(true);
     try {
       const result = await api.runScenario(scenario, threshold);
+      const drawdown = Number(result.projectedDrawdownPct ?? -(threshold + 1.2));
+      const sim = {
+        scenario: result.scenario || scenario,
+        projectedDrawdownPct: drawdown,
+        threshold: Number(result.threshold ?? threshold),
+        opensCheckpoint: Boolean(result.opensCheckpoint),
+        message: result.message || `${scenario} complete`,
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setSimulationResult(sim);
       toast("Scenario complete", {
-        description: `${scenario} finished — projected drawdown: −${result.projectedDrawdownPct?.toFixed(1) ?? (threshold + 1.2).toFixed(1)}%`,
+        description: `${scenario} finished — projected drawdown: ${drawdown}%`,
       });
     } catch {
       toast.error("Scenario failed — check the server.");
@@ -224,11 +244,73 @@ export default function RiskMatrix() {
               <Play size={14} fill="currentColor" />
               {running ? "Running scenario…" : "Run stress test"}
             </button>
-            <div className="mt-4 flex items-start gap-2 rounded-md bg-[#fff0eb] p-3 text-[10px] leading-4 text-[#956e61]">
-              <AlertTriangle size={13} className="mt-0.5 flex-none text-[#f37a0a]" />
-              Any scenario crossing the selected threshold will automatically open a human review
-              checkpoint.
-            </div>
+
+            {simulationResult ? (
+              <div className="mt-4 rounded-lg border border-[#e8dacc] bg-[#fbf6f0] p-4 shadow-sm animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#a46a3f]">Simulation outcome</span>
+                    <span className="font-mono text-[9px] text-[#9c8982]">· {simulationResult.timestamp}</span>
+                  </div>
+                  <span className={`font-mono text-[10px] px-2 py-0.5 rounded-full ${
+                    simulationResult.opensCheckpoint
+                      ? "bg-[#fff0eb] text-[#e06c43] font-semibold"
+                      : "bg-[#e5f0e9] text-[#6d846a]"
+                  }`}>
+                    {simulationResult.opensCheckpoint ? "Checkpoint Triggered" : "Within Envelope"}
+                  </span>
+                </div>
+
+                <div className="mt-3 flex items-baseline justify-between">
+                  <div className="font-display text-[24px] text-[#242424]">
+                    {simulationResult.projectedDrawdownPct > 0 ? `−${simulationResult.projectedDrawdownPct}%` : `${simulationResult.projectedDrawdownPct}%`}
+                  </div>
+                  <div className="text-right">
+                    <div className="font-mono text-[11px] text-[#e06c43]">
+                      −${Math.round(Math.abs(simulationResult.projectedDrawdownPct) * 7084.2).toLocaleString()} est.
+                    </div>
+                    <div className="font-mono text-[9px] text-[#9c8982]">portfolio impact</div>
+                  </div>
+                </div>
+
+                <div className="mt-3">
+                  <div className="flex justify-between font-mono text-[9px] text-[#8e7970] mb-1">
+                    <span>Drawdown: {Math.abs(simulationResult.projectedDrawdownPct)}%</span>
+                    <span>Tolerance threshold: {simulationResult.threshold}%</span>
+                  </div>
+                  <div className="relative h-2 w-full overflow-hidden rounded-full bg-[#ebdcd3]">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        simulationResult.opensCheckpoint ? "bg-[#e06c43]" : "bg-[#6d846a]"
+                      }`}
+                      style={{ width: `${Math.min(100, (Math.abs(simulationResult.projectedDrawdownPct) / 10) * 100)}%` }}
+                    />
+                  </div>
+                </div>
+
+                {simulationResult.opensCheckpoint ? (
+                  <div className="mt-3 flex items-center justify-between pt-3 border-t border-[#ebdcd3]">
+                    <span className="text-[10px] text-[#ae6b50]">Breach requires operator review</span>
+                    <button
+                      className="text-[10px] font-semibold text-[#e06c43] hover:underline"
+                      onClick={() => setLocation("/exceptions")}
+                    >
+                      Open exceptions →
+                    </button>
+                  </div>
+                ) : (
+                  <div className="mt-3 pt-3 border-t border-[#ebdcd3] text-[10px] text-[#6d846a]">
+                    ✓ Stress test clears all risk policies without triage escalation.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="mt-4 flex items-start gap-2 rounded-md bg-[#fff0eb] p-3 text-[10px] leading-4 text-[#956e61]">
+                <AlertTriangle size={13} className="mt-0.5 flex-none text-[#f37a0a]" />
+                Any scenario crossing the selected threshold will automatically open a human review
+                checkpoint.
+              </div>
+            )}
           </div>
         </section>
       </div>

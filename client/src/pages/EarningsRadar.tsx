@@ -1,31 +1,130 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Bell,
   CalendarDays,
+  Check,
   ChevronRight,
   Clock3,
   ExternalLink,
   Filter,
   Plus,
+  RotateCcw,
   Sparkles,
   TrendingUp,
+  X,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import WorkspaceLayout from "@/components/WorkspaceLayout";
 import { api, type EarningsData } from "@/lib/api";
 
 export default function EarningsRadar() {
+  const [, setLocation] = useLocation();
   const [horizon, setHorizon] = useState("30 days");
   const [data, setData] = useState<EarningsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    api
+  // Filters
+  const [showFilters, setShowFilters] = useState(false);
+  const [impactFilter, setImpactFilter] = useState("All");
+  const [alertFilter, setAlertFilter] = useState("All");
+
+  // Add custom catalyst modal
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [catForm, setCatForm] = useState({
+    ticker: "",
+    title: "",
+    date_str: "Apr 25",
+    timing: "Post-market",
+    impact: "High",
+    move_str: "±6.5%",
+  });
+
+  function refreshEarnings() {
+    return api
       .getEarnings()
       .then(setData)
       .catch(() => toast.error("Failed to load earnings radar"))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refreshEarnings();
   }, []);
+
+  // Filter catalysts by horizon, impact, and alert status
+  const filteredCatalysts = useMemo(() => {
+    if (!data?.catalysts) return [];
+    return data.catalysts.filter((cat) => {
+      // Horizon filter
+      if (horizon === "7 days") {
+        const d = cat.date_str.toLowerCase();
+        // Match only items in late March near Mar 18
+        if (!d.includes("mar 18") && !d.includes("mar 20") && !d.includes("mar 22")) {
+          return false;
+        }
+      } else if (horizon === "30 days") {
+        const d = cat.date_str.toLowerCase();
+        // Skip May events in 30-day view
+        if (d.includes("may")) {
+          return false;
+        }
+      }
+
+      // Impact filter
+      if (impactFilter !== "All" && cat.impact !== impactFilter) {
+        return false;
+      }
+
+      // Alert filter
+      if (alertFilter === "Armed" && !cat.alertArmed) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [data, horizon, impactFilter, alertFilter]);
+
+  const activeFilterCount = (impactFilter !== "All" ? 1 : 0) + (alertFilter !== "All" ? 1 : 0);
+
+  async function handleAddCatalyst(e: React.FormEvent) {
+    e.preventDefault();
+    const sym = catForm.ticker.trim().toUpperCase();
+    if (!sym || !catForm.title.trim()) {
+      toast.error("Ticker and catalyst title required");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.addCatalyst({
+        ticker: sym,
+        title: catForm.title.trim(),
+        date_str: catForm.date_str.trim() || "Apr 25",
+        timing: catForm.timing,
+        impact: catForm.impact,
+        move_str: catForm.move_str,
+      });
+      await refreshEarnings();
+      toast.success(`${sym} catalyst added`, {
+        description: "Added to market catalyst radar and armed for telemetry.",
+      });
+      setIsAddOpen(false);
+      setCatForm({
+        ticker: "",
+        title: "",
+        date_str: "Apr 25",
+        timing: "Post-market",
+        impact: "High",
+        move_str: "±6.5%",
+      });
+    } catch {
+      toast.error("Failed to add catalyst");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function toggleAlert(ticker: string) {
     try {
@@ -152,18 +251,60 @@ export default function EarningsRadar() {
               ))}
             </div>
             <button
-              className="secondary-button"
-              onClick={() =>
-                toast("Radar filters", {
-                  description:
-                    "Filter drawer is ready for sector, impact, and portfolio relevance.",
-                })
-              }
+              className={`secondary-button ${showFilters ? "secondary-button-active" : ""}`}
+              onClick={() => setShowFilters(!showFilters)}
             >
               <Filter size={14} /> Filter
+              {activeFilterCount > 0 && (
+                <span className="ml-1 rounded-full bg-[#e06c43] px-1.5 py-0.2 font-mono text-[9px] text-white">
+                  {activeFilterCount}
+                </span>
+              )}
             </button>
           </div>
         </div>
+
+        {showFilters && (
+          <div className="border-b border-[#ebdcd3] bg-[#fdf9f5] px-5 py-3 animate-in fade-in duration-150">
+            <div className="flex flex-wrap items-center gap-4 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#9c8982]">Impact:</span>
+                {["All", "High", "Medium"].map((lvl) => (
+                  <button
+                    key={lvl}
+                    className={`audit-filter ${impactFilter === lvl ? "audit-filter-active" : ""}`}
+                    onClick={() => setImpactFilter(lvl)}
+                  >
+                    {lvl}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-[9px] uppercase tracking-[0.14em] text-[#9c8982]">Status:</span>
+                {["All", "Armed"].map((st) => (
+                  <button
+                    key={st}
+                    className={`audit-filter ${alertFilter === st ? "audit-filter-active" : ""}`}
+                    onClick={() => setAlertFilter(st)}
+                  >
+                    {st === "Armed" ? "Armed only" : "All"}
+                  </button>
+                ))}
+              </div>
+              {activeFilterCount > 0 && (
+                <button
+                  className="ml-auto flex items-center gap-1 font-mono text-[10px] text-[#e06c43] hover:underline"
+                  onClick={() => {
+                    setImpactFilter("All");
+                    setAlertFilter("All");
+                  }}
+                >
+                  <RotateCcw size={11} /> Reset
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="earnings-list">
           {loading && (
@@ -172,16 +313,26 @@ export default function EarningsRadar() {
             </div>
           )}
           {!loading &&
-            (data?.catalysts ?? []).map((cat) => (
+            filteredCatalysts.map((cat) => (
               <div className="earnings-row" key={cat.id}>
                 <div className="earnings-date">
                   <b>{cat.date_str.split(" ")[0]}</b>
                   <span>{cat.date_str.split(" ")[1]}</span>
                 </div>
-                <div className="ticker-avatar">{cat.ticker.slice(0, 1)}</div>
+                <button
+                  className="ticker-avatar"
+                  onClick={() => setLocation(`/stock/${cat.ticker}`)}
+                >
+                  {cat.ticker.slice(0, 1)}
+                </button>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <b className="text-[12px] text-[#40332c]">{cat.ticker}</b>
+                    <button
+                      className="ticker-link font-semibold"
+                      onClick={() => setLocation(`/stock/${cat.ticker}`)}
+                    >
+                      {cat.ticker}
+                    </button>
                     <span className={`impact-badge impact-badge-${cat.tone}`}>{cat.impact}</span>
                   </div>
                   <div className="mt-1 text-[11px] text-[#8e7970]">{cat.title}</div>
@@ -199,32 +350,145 @@ export default function EarningsRadar() {
                 </button>
                 <button
                   className="earnings-open"
-                  onClick={() =>
-                    toast(`${cat.ticker} catalyst opened`, {
-                      description: "Analyst estimates and implied-move context are ready.",
-                    })
-                  }
+                  title={`Open ${cat.ticker} detail`}
+                  onClick={() => setLocation(`/stock/${cat.ticker}`)}
                 >
                   <ExternalLink size={14} />
                 </button>
-                <ChevronRight size={14} className="text-[#b39e94]" />
+                <ChevronRight
+                  size={14}
+                  className="cursor-pointer text-[#b39e94] hover:text-[#40332c]"
+                  onClick={() => setLocation(`/stock/${cat.ticker}`)}
+                />
               </div>
             ))}
+          {!loading && !filteredCatalysts.length && (
+            <div className="px-5 py-10 text-center text-[11px] text-[#9c8982]">
+              No catalysts match the selected horizon and filters.
+            </div>
+          )}
         </div>
 
         <div className="panel-footer-action">
           <button
             className="secondary-button"
-            onClick={() =>
-              toast("Add catalyst", {
-                description: "Custom catalyst tracking is ready for a ticker or filing date.",
-              })
-            }
+            onClick={() => setIsAddOpen(true)}
           >
             <Plus size={14} /> Add custom catalyst
           </button>
         </div>
       </section>
+
+      {/* Add Custom Catalyst Modal */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-md rounded-xl border border-[#ded2c2] bg-[#fbf6f0] p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e8dacc]">
+              <div className="flex items-center gap-2">
+                <div className="metric-icon metric-icon-orange p-1.5"><CalendarDays size={16} /></div>
+                <h3 className="font-display text-[20px] text-[#34261f]">Add Custom Catalyst</h3>
+              </div>
+              <button
+                className="icon-button icon-button-small"
+                onClick={() => setIsAddOpen(false)}
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <form onSubmit={handleAddCatalyst} className="mt-4 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="field-label">Ticker symbol</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. TSLA"
+                    maxLength={8}
+                    className="w-full rounded-md border border-[#d8c7b8] bg-white px-3 py-2 font-mono text-[13px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                    value={catForm.ticker}
+                    onChange={(e) => setCatForm({ ...catForm, ticker: e.target.value.toUpperCase() })}
+                  />
+                </div>
+                <div>
+                  <label className="field-label">Date string</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Apr 25"
+                    className="w-full rounded-md border border-[#d8c7b8] bg-white px-3 py-2 font-mono text-[12px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                    value={catForm.date_str}
+                    onChange={(e) => setCatForm({ ...catForm, date_str: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="field-label">Catalyst title / description</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Q1 Earnings Call & Margin Guidance"
+                  className="w-full rounded-md border border-[#d8c7b8] bg-white px-3 py-2 text-[12px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                  value={catForm.title}
+                  onChange={(e) => setCatForm({ ...catForm, title: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="field-label">Timing</label>
+                  <select
+                    className="w-full rounded-md border border-[#d8c7b8] bg-white px-2 py-2 text-[11px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                    value={catForm.timing}
+                    onChange={(e) => setCatForm({ ...catForm, timing: e.target.value })}
+                  >
+                    <option value="Post-market">Post-market</option>
+                    <option value="Pre-market">Pre-market</option>
+                    <option value="During session">During session</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Impact</label>
+                  <select
+                    className="w-full rounded-md border border-[#d8c7b8] bg-white px-2 py-2 text-[11px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                    value={catForm.impact}
+                    onChange={(e) => setCatForm({ ...catForm, impact: e.target.value })}
+                  >
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="field-label">Implied Move</label>
+                  <input
+                    type="text"
+                    placeholder="±6.5%"
+                    className="w-full rounded-md border border-[#d8c7b8] bg-white px-2 py-2 font-mono text-[11px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                    value={catForm.move_str}
+                    onChange={(e) => setCatForm({ ...catForm, move_str: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#e8dacc] pt-4">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsAddOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={submitting}
+                >
+                  <Check size={14} />
+                  {submitting ? "Adding..." : "Add catalyst"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </WorkspaceLayout>
   );
 }

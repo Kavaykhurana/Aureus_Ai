@@ -109,20 +109,80 @@ const agents: Agent[] = [
   },
 ];
 
-const chartData = [
-  { month: "Apr 01", portfolio: 100, benchmark: 100 },
-  { month: "Apr 08", portfolio: 101.8, benchmark: 100.9 },
-  { month: "Apr 15", portfolio: 101.2, benchmark: 101.8 },
-  { month: "Apr 22", portfolio: 103.1, benchmark: 102.4 },
-  { month: "Apr 29", portfolio: 102.8, benchmark: 103.2 },
-  { month: "May 06", portfolio: 105.4, benchmark: 104.1 },
-  { month: "May 13", portfolio: 104.9, benchmark: 104.7 },
-  { month: "May 20", portfolio: 107.3, benchmark: 105.9 },
-  { month: "May 27", portfolio: 108.4, benchmark: 106.8 },
-  { month: "Jun 03", portfolio: 110.1, benchmark: 108.1 },
-  { month: "Jun 10", portfolio: 109.5, benchmark: 108.8 },
-  { month: "Jun 17", portfolio: 112.7, benchmark: 110.2 },
-];
+type RangeKey = "1M" | "3M" | "1Y";
+
+interface RangeConfig {
+  dateLabel: string;
+  domain: [number, number];
+  portfolioReturn: string;
+  benchmarkReturn: string;
+  alpha: string;
+  data: Array<{ month: string; portfolio: number; benchmark: number }>;
+}
+
+const rangeConfigs: Record<RangeKey, RangeConfig> = {
+  "1M": {
+    dateLabel: "May 17 — Jun 17, 2024",
+    domain: [105, 114],
+    portfolioReturn: "+5.0%",
+    benchmarkReturn: "+4.1%",
+    alpha: "+0.9%",
+    data: [
+      { month: "May 17", portfolio: 107.3, benchmark: 105.9 },
+      { month: "May 21", portfolio: 107.8, benchmark: 106.2 },
+      { month: "May 24", portfolio: 108.1, benchmark: 106.5 },
+      { month: "May 28", portfolio: 108.4, benchmark: 106.8 },
+      { month: "May 31", portfolio: 109.2, benchmark: 107.4 },
+      { month: "Jun 04", portfolio: 110.1, benchmark: 108.1 },
+      { month: "Jun 07", portfolio: 109.8, benchmark: 108.4 },
+      { month: "Jun 11", portfolio: 109.5, benchmark: 108.8 },
+      { month: "Jun 14", portfolio: 111.2, benchmark: 109.4 },
+      { month: "Jun 17", portfolio: 112.7, benchmark: 110.2 },
+    ],
+  },
+  "3M": {
+    dateLabel: "Apr 01 — Jun 17, 2024",
+    domain: [98, 114],
+    portfolioReturn: "+12.7%",
+    benchmarkReturn: "+10.2%",
+    alpha: "+2.5%",
+    data: [
+      { month: "Apr 01", portfolio: 100.0, benchmark: 100.0 },
+      { month: "Apr 08", portfolio: 101.8, benchmark: 100.9 },
+      { month: "Apr 15", portfolio: 101.2, benchmark: 101.8 },
+      { month: "Apr 22", portfolio: 103.1, benchmark: 102.4 },
+      { month: "Apr 29", portfolio: 102.8, benchmark: 103.2 },
+      { month: "May 06", portfolio: 105.4, benchmark: 104.1 },
+      { month: "May 13", portfolio: 104.9, benchmark: 104.7 },
+      { month: "May 20", portfolio: 107.3, benchmark: 105.9 },
+      { month: "May 27", portfolio: 108.4, benchmark: 106.8 },
+      { month: "Jun 03", portfolio: 110.1, benchmark: 108.1 },
+      { month: "Jun 10", portfolio: 109.5, benchmark: 108.8 },
+      { month: "Jun 17", portfolio: 112.7, benchmark: 110.2 },
+    ],
+  },
+  "1Y": {
+    dateLabel: "Jun 2023 — Jun 2024",
+    domain: [82, 116],
+    portfolioReturn: "+33.8%",
+    benchmarkReturn: "+24.1%",
+    alpha: "+9.7%",
+    data: [
+      { month: "Jul '23", portfolio: 84.2, benchmark: 88.6 },
+      { month: "Aug '23", portfolio: 86.5, benchmark: 89.2 },
+      { month: "Sep '23", portfolio: 85.1, benchmark: 86.8 },
+      { month: "Oct '23", portfolio: 88.4, benchmark: 87.5 },
+      { month: "Nov '23", portfolio: 92.1, benchmark: 92.0 },
+      { month: "Dec '23", portfolio: 96.0, benchmark: 95.8 },
+      { month: "Jan '24", portfolio: 97.8, benchmark: 96.4 },
+      { month: "Feb '24", portfolio: 101.4, benchmark: 99.8 },
+      { month: "Mar '24", portfolio: 104.2, benchmark: 102.6 },
+      { month: "Apr '24", portfolio: 102.8, benchmark: 103.2 },
+      { month: "May '24", portfolio: 108.4, benchmark: 106.8 },
+      { month: "Jun '24", portfolio: 112.7, benchmark: 110.2 },
+    ],
+  },
+};
 
 const initialStatuses: Record<string, AgentStatus> = {
   analyst: "idle",
@@ -406,6 +466,20 @@ export default function Home() {
     startRun("NVDA");
   }
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const qTicker = params.get("ticker");
+    if (qTicker) {
+      const sym = qTicker.trim().toUpperCase();
+      setTicker(sym);
+      setActiveTicker(sym);
+      const timer = setTimeout(() => {
+        startRun(sym);
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
   async function handleDecision(nextDecision: Exclude<Decision, "pending">) {
     setDecision(nextDecision);
     setRequiresApproval(false);
@@ -563,9 +637,109 @@ export default function Home() {
             </div>
 
             <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.35fr)_minmax(310px,0.75fr)]">
-              <section className="panel chart-panel"><div className="panel-header"><div><div className="eyebrow"><LineChartIcon size={11} /> Portfolio intelligence</div><h3 className="panel-title">Relative performance</h3></div><div className="chart-legend"><span><i className="legend-line legend-line-portfolio" /> Aureus portfolio</span><span><i className="legend-line legend-line-benchmark" /> S&amp;P 500</span></div></div><div className="chart-toolbar"><div className="font-mono text-[10px] text-[#9a8975]">Apr 01 — Jun 17, 2024</div><div className="flex items-center gap-1 rounded-md bg-[#f1e9dd] p-1"><button className={`range-button ${chartRange === "1M" ? "range-button-active" : ""}`} onClick={() => selectChartRange("1M")}>1M</button><button className={`range-button ${chartRange === "3M" ? "range-button-active" : ""}`} onClick={() => selectChartRange("3M")}>3M</button><button className={`range-button ${chartRange === "1Y" ? "range-button-active" : ""}`} onClick={() => selectChartRange("1Y")}>1Y</button></div></div><div className="mt-2 h-[220px] w-full"><ResponsiveContainer width="100%" height="100%"><LineChart data={chartData} margin={{ top: 12, right: 4, left: -18, bottom: 0 }}><CartesianGrid stroke="#eee5d8" strokeDasharray="2 4" vertical={false} /><XAxis dataKey="month" tick={{ fill: "#a69684", fontSize: 9, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} interval={2} /><YAxis domain={[98, 114]} tick={{ fill: "#a69684", fontSize: 9, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}`} /><Tooltip contentStyle={{ border: "1px solid #e3d7c7", borderRadius: 8, background: "#fffaf3", boxShadow: "0 8px 24px rgba(81,55,33,0.10)", fontSize: 11 }} labelStyle={{ color: "#8f7b67", fontFamily: "IBM Plex Mono", fontSize: 10 }} formatter={(value: number, name: string) => [`${value.toFixed(1)}`, name === "portfolio" ? "Aureus portfolio" : "S&P 500"]} /><Line type="monotone" dataKey="portfolio" stroke="#9b623c" strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: "#9b623c", stroke: "#fffaf3", strokeWidth: 2 }} /><Line type="monotone" dataKey="benchmark" stroke="#bdb3a7" strokeWidth={1.6} strokeDasharray="4 4" dot={false} /></LineChart></ResponsiveContainer></div><div className="mt-1 flex items-center gap-2 border-t border-[#eee5da] pt-3 text-[11px] text-[#817162]"><span className="font-mono text-[10px] font-semibold text-[#6d846a]">+12.7%</span><span>portfolio return</span><span className="mx-1 text-[#c7b9a8]">·</span><span className="font-mono text-[10px] font-semibold text-[#938474]">+10.2%</span><span>benchmark return</span><span className="ml-auto font-mono text-[10px] text-[#a18e7b]">+2.5% alpha</span></div></section>
+              {(() => {
+                const activeRange = rangeConfigs[(chartRange as RangeKey)] || rangeConfigs["3M"];
+                return (
+                  <section className="panel chart-panel">
+                    <div className="panel-header">
+                      <div>
+                        <div className="eyebrow"><LineChartIcon size={11} /> Portfolio intelligence</div>
+                        <h3 className="panel-title">Relative performance</h3>
+                      </div>
+                      <div className="chart-legend">
+                        <span><i className="legend-line legend-line-portfolio" /> Aureus portfolio</span>
+                        <span><i className="legend-line legend-line-benchmark" /> S&amp;P 500</span>
+                      </div>
+                    </div>
+                    <div className="chart-toolbar">
+                      <div className="font-mono text-[10px] text-[#9a8975]">{activeRange.dateLabel}</div>
+                      <div className="flex items-center gap-1 rounded-md bg-[#f1e9dd] p-1">
+                        <button className={`range-button ${chartRange === "1M" ? "range-button-active" : ""}`} onClick={() => selectChartRange("1M")}>1M</button>
+                        <button className={`range-button ${chartRange === "3M" ? "range-button-active" : ""}`} onClick={() => selectChartRange("3M")}>3M</button>
+                        <button className={`range-button ${chartRange === "1Y" ? "range-button-active" : ""}`} onClick={() => selectChartRange("1Y")}>1Y</button>
+                      </div>
+                    </div>
+                    <div className="mt-2 h-[220px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={activeRange.data} margin={{ top: 12, right: 4, left: -18, bottom: 0 }}>
+                          <CartesianGrid stroke="#eee5d8" strokeDasharray="2 4" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fill: "#a69684", fontSize: 9, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} interval={activeRange.data.length > 10 ? 2 : 1} />
+                          <YAxis domain={activeRange.domain} tick={{ fill: "#a69684", fontSize: 9, fontFamily: "IBM Plex Mono" }} axisLine={false} tickLine={false} tickFormatter={(value) => `${value}`} />
+                          <Tooltip contentStyle={{ border: "1px solid #e3d7c7", borderRadius: 8, background: "#fffaf3", boxShadow: "0 8px 24px rgba(81,55,33,0.10)", fontSize: 11 }} labelStyle={{ color: "#8f7b67", fontFamily: "IBM Plex Mono", fontSize: 10 }} formatter={(value: number, name: string) => [`${value.toFixed(1)}`, name === "portfolio" ? "Aureus portfolio" : "S&P 500"]} />
+                          <Line type="monotone" dataKey="portfolio" stroke="#9b623c" strokeWidth={2.5} dot={false} activeDot={{ r: 4, fill: "#9b623c", stroke: "#fffaf3", strokeWidth: 2 }} />
+                          <Line type="monotone" dataKey="benchmark" stroke="#bdb3a7" strokeWidth={1.6} strokeDasharray="4 4" dot={false} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                    <div className="mt-1 flex items-center gap-2 border-t border-[#eee5da] pt-3 text-[11px] text-[#817162]">
+                      <span className="font-mono text-[10px] font-semibold text-[#6d846a]">{activeRange.portfolioReturn}</span>
+                      <span>portfolio return</span>
+                      <span className="mx-1 text-[#c7b9a8]">·</span>
+                      <span className="font-mono text-[10px] font-semibold text-[#938474]">{activeRange.benchmarkReturn}</span>
+                      <span>benchmark return</span>
+                      <span className="ml-auto font-mono text-[10px] text-[#a18e7b]">{activeRange.alpha} alpha</span>
+                    </div>
+                  </section>
+                );
+              })()}
 
-              <section className="panel"><div className="panel-header"><div><div className="eyebrow"><CircleDollarSign size={11} /> Signal quality</div><h3 className="panel-title">Sentiment &amp; compliance</h3></div><button className="icon-button icon-button-small" onClick={() => toast("Signal details", { description: "Signals are aggregated from market, filings, and news evidence." })} aria-label="View signal details"><MoreHorizontal size={15} /></button></div><div className="signal-score-wrap"><div className="score-ring"><div className="score-ring-inner"><span className="font-display text-[29px] tracking-[-0.05em] text-[#3b2e25]">78</span><span className="font-mono text-[9px] text-[#9b8975]">/ 100</span></div></div><div className="min-w-0"><div className="text-[14px] font-semibold text-[#493a2f]">Constructive bullish</div><div className="mt-1 text-[11px] leading-4 text-[#968272]">Analyst confidence is above the 70 threshold for consideration.</div><div className="mt-3 flex items-center gap-2"><span className="signal-pill signal-pill-green"><ArrowUpRight size={12} /> +8.4 pts</span><span className="font-mono text-[9px] text-[#aa9884]">vs 7D avg</span></div></div></div><div className="mt-5 space-y-4"><div><div className="mb-2 flex justify-between text-[10px] text-[#8f7b67]"><span>News velocity</span><span className="font-mono text-[#645344]">82%</span></div><div className="progress-track"><div className="progress-fill progress-fill-brown" style={{ width: "82%" }} /></div></div><div><div className="mb-2 flex justify-between text-[10px] text-[#8f7b67]"><span>Fundamental alignment</span><span className="font-mono text-[#645344]">74%</span></div><div className="progress-track"><div className="progress-fill progress-fill-gold" style={{ width: "74%" }} /></div></div></div><div className="compliance-row"><div className="flex items-center gap-2"><div className="compliance-check"><Check size={13} /></div><div><div className="text-[11px] font-semibold text-[#52654f]">Compliance approved</div><div className="mt-0.5 text-[10px] text-[#968474]">No restricted-list conflicts detected</div></div></div><ChevronDown size={14} className="text-[#a4927e]" /></div></section>
+              <section className="panel">
+                <div className="panel-header">
+                  <div>
+                    <div className="eyebrow"><CircleDollarSign size={11} /> Signal quality</div>
+                    <h3 className="panel-title">Sentiment &amp; compliance</h3>
+                  </div>
+                  <button className="icon-button icon-button-small" onClick={() => toast("Signal details", { description: "Signals are aggregated from market, filings, and news evidence." })} aria-label="View signal details">
+                    <MoreHorizontal size={15} />
+                  </button>
+                </div>
+                <div className="signal-score-wrap">
+                  <div className="score-ring">
+                    <div className="score-ring-inner">
+                      <span className="font-display text-[29px] tracking-[-0.05em] text-[#3b2e25]">78</span>
+                      <span className="font-mono text-[9px] text-[#9b8975]">/ 100</span>
+                    </div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-semibold text-[#493a2f]">Constructive bullish</div>
+                    <div className="mt-1 text-[11px] leading-4 text-[#968272]">Analyst confidence is above the 70 threshold for consideration.</div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="signal-pill signal-pill-green"><ArrowUpRight size={12} /> +8.4 pts</span>
+                      <span className="font-mono text-[9px] text-[#aa9884]">vs 7D avg</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="px-5 mt-5 space-y-4">
+                  <div>
+                    <div className="mb-2 flex justify-between text-[10px] text-[#8f7b67]">
+                      <span>News velocity</span>
+                      <span className="font-mono text-[#645344]">82%</span>
+                    </div>
+                    <div className="progress-track">
+                      <div className="progress-fill progress-fill-brown" style={{ width: "82%" }} />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="mb-2 flex justify-between text-[10px] text-[#8f7b67]">
+                      <span>Fundamental alignment</span>
+                      <span className="font-mono text-[#645344]">74%</span>
+                    </div>
+                    <div className="progress-track">
+                      <div className="progress-fill progress-fill-gold" style={{ width: "74%" }} />
+                    </div>
+                  </div>
+                </div>
+                <div className="compliance-row">
+                  <div className="flex items-center gap-2">
+                    <div className="compliance-check"><Check size={13} /></div>
+                    <div>
+                      <div className="text-[11px] font-semibold text-[#52654f]">Compliance approved</div>
+                      <div className="mt-0.5 text-[10px] text-[#968474]">No restricted-list conflicts detected</div>
+                    </div>
+                  </div>
+                  <ChevronDown size={14} className="text-[#a4927e]" />
+                </div>
+              </section>
             </div>
 
             <section className="panel mt-5"><div className="panel-header"><div><div className="eyebrow"><Activity size={11} /> Live reasoning feed</div><h3 className="panel-title">Evidence chain <span className="font-mono text-[10px] font-normal tracking-normal text-[#9d8c79]">/ auto-updating</span></h3></div><div className="flex items-center gap-3"><span className="hidden font-mono text-[9px] uppercase tracking-[0.14em] text-[#9f8a75] sm:block">Last event {liveTime}</span><button className="feed-filter" onClick={cycleFeedFilter}><span className="pulse-dot pulse-dot-soft" />{feedFilter} <ChevronDown size={12} /></button></div></div><div className="feed-header"><span>Timestamp</span><span>Agent</span><span>Reasoning event</span></div><div className="feed-list">{visibleFeed.length ? visibleFeed.map((item) => <FeedRow key={item.id} item={item} />) : <div className="px-5 py-8 text-center text-[11px] text-[#9b8975]">No events for {feedFilter} yet.</div>}</div><div className="feed-footer"><Clock3 size={12} /> Showing {visibleFeed.length} events · every handoff is cryptographically traceable <span className="ml-auto hidden font-mono text-[9px] text-[#a18d7a] sm:block">Stream latency 84ms</span></div></section>

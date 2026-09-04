@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { db } from "../db/index.js";
+import { MarketDataService } from "../services/marketDataService.js";
 
 const router = Router();
 
@@ -43,6 +44,60 @@ router.get("/", (_req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/watchlist/add
+ * Explicitly adds a new symbol to the watchlist with market metrics.
+ */
+router.post("/add", (req: Request, res: Response) => {
+  const { ticker, name } = req.body;
+  if (!ticker || typeof ticker !== "string") {
+    res.status(400).json({ error: "Valid ticker required" });
+    return;
+  }
+
+  const sym = ticker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10);
+  if (!sym) {
+    res.status(400).json({ error: "Valid ticker symbol required" });
+    return;
+  }
+
+  const quote = MarketDataService.getStockQuote(sym);
+  const companyName = name && typeof name === "string" && name.trim() ? name.trim() : quote.name;
+  const confidence = 65 + Math.floor(Math.random() * 25);
+  const signal = confidence >= 80 ? "Bullish" : confidence >= 70 ? "Constructive" : "Neutral";
+  const tone = confidence >= 75 ? "green" : confidence >= 68 ? "gold" : "neutral";
+  const now = new Date().toISOString();
+
+  const existing = db.prepare("SELECT alert_armed FROM watchlist WHERE ticker = ?").get(sym) as { alert_armed: number } | undefined;
+
+  if (existing) {
+    db.prepare(`
+      UPDATE watchlist
+      SET name = ?, price = ?, change_pct = ?, updated_at = ?
+      WHERE ticker = ?
+    `).run(companyName, quote.price, quote.changePct, now, sym);
+  } else {
+    db.prepare(`
+      INSERT INTO watchlist (ticker, name, price, change_pct, confidence, signal, tone, alert_armed, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)
+    `).run(sym, companyName, quote.price, quote.changePct, confidence, signal, tone, now);
+  }
+
+  res.json({
+    success: true,
+    symbol: {
+      ticker: sym,
+      name: companyName,
+      price: quote.price,
+      change_pct: quote.changePct,
+      confidence,
+      signal,
+      tone,
+      alertArmed: true,
+    },
+  });
+});
+
+/**
  * POST /api/watchlist/toggle
  * Toggle alert for a ticker.
  */
@@ -71,10 +126,12 @@ router.post("/toggle", (req: Request, res: Response) => {
       WHERE ticker = ?
     `).run(nextState, now, sym);
   } else {
+    const quote = MarketDataService.getStockQuote(sym);
+    const confidence = 72;
     db.prepare(`
       INSERT INTO watchlist (ticker, name, price, change_pct, confidence, signal, tone, alert_armed, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(sym, `${sym} Corp`, 100.0, 1.0, 65, "Neutral", "neutral", 1, now);
+      VALUES (?, ?, ?, ?, ?, 'Constructive', 'green', 1, ?)
+    `).run(sym, quote.name, quote.price, quote.changePct, confidence, now);
   }
 
   res.json({ success: true, ticker: sym, alertArmed: Boolean(nextState) });

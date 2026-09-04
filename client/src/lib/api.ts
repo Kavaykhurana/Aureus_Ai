@@ -300,6 +300,14 @@ export const api = {
     return res.json();
   },
 
+  async dismissException(id: string) {
+    const res = await fetch(`/api/exceptions/${id}/dismiss`, {
+      method: "POST",
+    });
+    if (!res.ok) throw new Error("Failed to dismiss exception");
+    return res.json();
+  },
+
   async getStockDetail(ticker: string): Promise<StockDetailData> {
     const res = await fetch(`/api/stock/${ticker}`);
     if (!res.ok) throw new Error("Failed to fetch stock detail");
@@ -309,6 +317,16 @@ export const api = {
   async getWatchlist(): Promise<WatchlistData> {
     const res = await fetch("/api/watchlist");
     if (!res.ok) throw new Error("Failed to fetch watchlist");
+    return res.json();
+  },
+
+  async addWatchlistSymbol(ticker: string, name?: string) {
+    const res = await fetch("/api/watchlist/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ticker, name }),
+    });
+    if (!res.ok) throw new Error("Failed to add symbol to watchlist");
     return res.json();
   },
 
@@ -325,6 +343,23 @@ export const api = {
   async getEarnings(): Promise<EarningsData> {
     const res = await fetch("/api/earnings");
     if (!res.ok) throw new Error("Failed to fetch earnings");
+    return res.json();
+  },
+
+  async addCatalyst(payload: {
+    ticker: string;
+    title: string;
+    date_str: string;
+    timing?: string;
+    impact?: string;
+    move_str?: string;
+  }) {
+    const res = await fetch("/api/earnings/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("Failed to add custom catalyst");
     return res.json();
   },
 

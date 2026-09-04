@@ -8,6 +8,7 @@ import {
   Star,
   Target,
   TrendingUp,
+  X,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
@@ -20,13 +21,21 @@ export default function CoreWatchlist() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState("Signal");
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [addTicker, setAddTicker] = useState("");
+  const [addName, setAddName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    api
+  function refreshWatchlist() {
+    return api
       .getWatchlist()
       .then(setData)
       .catch(() => toast.error("Failed to load watchlist"))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    refreshWatchlist();
   }, []);
 
   const filtered = useMemo(() => {
@@ -43,6 +52,31 @@ export default function CoreWatchlist() {
             : a.ticker.localeCompare(b.ticker),
       );
   }, [data, query, sort]);
+
+  async function handleAddSymbol(e: React.FormEvent) {
+    e.preventDefault();
+    const sym = addTicker.trim().toUpperCase();
+    if (!sym) {
+      toast.error("Ticker symbol required");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.addWatchlistSymbol(sym, addName.trim() || undefined);
+      await refreshWatchlist();
+      toast.success(`${sym} added to core watchlist`, {
+        description: "Live monitoring and signal generation armed.",
+      });
+      setIsAddOpen(false);
+      setAddTicker("");
+      setAddName("");
+    } catch {
+      toast.error("Failed to add symbol");
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   async function toggleAlert(ticker: string) {
     try {
@@ -178,11 +212,7 @@ export default function CoreWatchlist() {
             </div>
             <button
               className="secondary-button"
-              onClick={() =>
-                toast("Add to watchlist", {
-                  description: "Type a ticker in the command center to start coverage.",
-                })
-              }
+              onClick={() => setIsAddOpen(true)}
             >
               <Plus size={14} /> Add symbol
             </button>
@@ -263,12 +293,8 @@ export default function CoreWatchlist() {
                 </button>
                 <button
                   className="icon-button icon-button-small"
-                  onClick={() =>
-                    toast(`${sym.ticker} actions`, {
-                      description:
-                        "Open detail or run a fresh analysis from the instrument workspace.",
-                    })
-                  }
+                  title={`Open ${sym.ticker} detail`}
+                  onClick={() => setLocation(`/stock/${sym.ticker}`)}
                 >
                   <MoreHorizontal size={14} />
                 </button>
@@ -276,6 +302,70 @@ export default function CoreWatchlist() {
             ))}
         </div>
       </section>
+
+      {/* In-app Add Watchlist Symbol Modal */}
+      {isAddOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-sm rounded-xl border border-[#ded2c2] bg-[#fbf6f0] p-6 shadow-2xl">
+            <div className="flex items-center justify-between pb-3 border-b border-[#e8dacc]">
+              <div className="flex items-center gap-2">
+                <div className="metric-icon metric-icon-orange p-1.5"><Plus size={16} /></div>
+                <h3 className="font-display text-[20px] text-[#34261f]">Add Watchlist Symbol</h3>
+              </div>
+              <button
+                className="icon-button icon-button-small"
+                onClick={() => setIsAddOpen(false)}
+              >
+                <X size={15} />
+              </button>
+            </div>
+            <form onSubmit={handleAddSymbol} className="mt-4 space-y-4">
+              <div>
+                <label className="field-label">Ticker symbol</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. TSLA, PLTR, AMD, COIN"
+                  maxLength={8}
+                  className="w-full rounded-md border border-[#d8c7b8] bg-white px-3 py-2 font-mono text-[13px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                  value={addTicker}
+                  onChange={(e) => setAddTicker(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div>
+                <label className="field-label">Company name (optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Tesla, Inc."
+                  className="w-full rounded-md border border-[#d8c7b8] bg-white px-3 py-2 text-[12px] text-[#34261f] outline-none focus:border-[#e06c43]"
+                  value={addName}
+                  onChange={(e) => setAddName(e.target.value)}
+                />
+              </div>
+              <p className="text-[11px] text-[#8e7970] leading-4">
+                Aureus will automatically initialize price telemetry, market metrics, and agent confidence monitoring.
+              </p>
+              <div className="mt-5 flex items-center justify-end gap-2 border-t border-[#e8dacc] pt-4">
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => setIsAddOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="primary-button"
+                  disabled={submitting}
+                >
+                  <Plus size={14} />
+                  {submitting ? "Adding..." : "Add to watchlist"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </WorkspaceLayout>
   );
 }

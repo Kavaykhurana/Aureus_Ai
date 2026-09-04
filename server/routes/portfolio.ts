@@ -59,7 +59,12 @@ router.get("/", (_req: Request, res: Response) => {
     alphaCapture: 2.5,
     concentrationPct: maxWeight.weight,
     concentrationTicker: maxWeight.ticker,
-    holdings,
+    holdings: (holdings as Array<{ ticker: string; name: string; weight: number; shares: number; last_price: number; cost_basis: number; return_pct: number; sector: string; tone: string }>).map((h) => ({
+      ...h,
+      return_pct: h.cost_basis > 0
+        ? Number((((h.last_price - h.cost_basis) / h.cost_basis) * 100).toFixed(1))
+        : h.return_pct,
+    })),
     chartData,
   });
 });
