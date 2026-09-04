@@ -7,12 +7,19 @@
 **An inspectable multi-agent financial intelligence OS.**  
 Five AI agents collaborate in real time to analyse equities, model risk, enforce compliance, and propose trade decisions — with a mandatory human-in-the-loop checkpoint before any execution.
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Online-00C7B7?style=for-the-badge&logo=cloudflare&logoColor=white)](https://asn-appears-revised-creativity.trycloudflare.com)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kavaykhurana/Aureus_Ai)
+
+<br/>
+
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-3178c6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61dafb?style=flat-square&logo=react&logoColor=black)](https://react.dev/)
 [![Express](https://img.shields.io/badge/Express-4.21-000?style=flat-square&logo=express)](https://expressjs.com/)
 [![SQLite](https://img.shields.io/badge/SQLite-node%3Asqlite-003b57?style=flat-square&logo=sqlite)](https://nodejs.org/api/sqlite.html)
 [![Vite](https://img.shields.io/badge/Vite-7-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
+
+> 🌐 **Live Public Deployment**: [asn-appears-revised-creativity.trycloudflare.com](https://asn-appears-revised-creativity.trycloudflare.com)
 
 </div>
 
