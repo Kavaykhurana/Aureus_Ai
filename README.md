@@ -55,40 +55,102 @@ Agent thoughts stream in real time to the UI via **Server-Sent Events (SSE)**.
 ## ✦ Feature Overview
 
 ### 🏠 Command Center (Home)
-Live ticker analysis with real-time SSE thought stream. Watch all five agents reason sequentially before surfacing a recommendation. Includes the **HITL checkpoint** — a one-click approve/reject decision that is signed with a SHA-256 hash and written permanently to the audit trail.
+Live ticker analysis with a real-time SSE thought stream. Watch all five agents reason sequentially before surfacing a recommendation. Includes the **HITL checkpoint** — a one-click approve/reject decision signed with a SHA-256 hash and written permanently to the audit trail.
+
+- Accepts a `?ticker=NVDA` URL parameter to auto-trigger analysis (used by "Run fresh analysis" from Stock Detail and "Re-run" from Analysis History)
+- Portfolio performance chart with 1M / 3M / 1Y range switching
 
 ### 📊 Portfolio
-Live holdings dashboard showing position weights, P&L, sector breakdown, and a benchmark comparison chart. Add holdings via the API.
+Live holdings dashboard with 13 pre-seeded positions across Technology, Healthcare, Financials, Consumer, and Industrials sectors.
+
+- **In-app Add Position modal** — add new holdings with ticker, weight, shares, price, and sector; no browser prompts
+- **Dynamic chart periods** — 1W / 1M / 3M / 1Y views with distinct SVG path data and S&P 500 benchmark comparison
+- **Sector allocation donut** — dynamically recalculates from live holdings data
+- **Return % computed server-side** — `(last_price − cost_basis) / cost_basis × 100` on every read
+- **CSV Export** — download full holdings ledger as a dated file
 
 ### 🛡️ Risk Matrix
-Real-time VaR, open alerts, and policy health score. Includes a **Stress Lab** to run four configurable scenarios (base case, rate shock, tech selloff, liquidity event) and see projected drawdown before committing.
+Real-time VaR, open alerts, and policy health score with a 5-dimension exposure map.
+
+- **Stress Lab** — four configurable scenarios: Base case, Rate shock, Tech selloff, Liquidity event
+- **Simulation outcome card** — shows projected drawdown %, estimated dollar impact, a fill bar, and a direct link to the Exceptions queue if a checkpoint was triggered
+- Risk threshold slider (1.0% – 5.0%)
 
 ### 📋 Audit Trail
 Immutable, cryptographically hashed event log. Every agent action, human decision, and policy change is recorded with a SHA-256 signature and a `signed_by` field — 7-year retention policy.
 
+- Filter by agent type: Analyst, Risk, Compliance, Strategist, Guardrail, Human, System
+- Full-text search across event messages
+- CSV export of signed audit records
+
 ### ⚖️ Policy Center
-Configure guardrail parameters in real time:
+Configure guardrail parameters in real time with a **live health score** that responds instantly to every slider/toggle change:
+
 - Single-position concentration limit (5–50%)
 - VaR threshold that triggers human approval (1–5%)
 - Compliance hard stop toggle
-- Two-person approval (enterprise)
+- Two-person approval (enterprise dual-operator)
+- Dynamic posture label: Healthy / Balanced / Permissive
 
 All policies are persisted to the database and applied on the next analysis run.
 
 ### ⚠️ Exceptions
-A triage queue for policy breaches, stale evidence windows, and overdue human approvals. Resolve, route, or dismiss — all actions are audit-logged.
+A triage queue for policy breaches, stale evidence windows, and overdue human approvals.
+
+- **Resolve** — marks closed and writes an audit event
+- **Dismiss** — records dismissal in the audit log
+- **Investigate** — context-aware routing: ticker → Stock Detail, Risk owner → Risk Matrix, Compliance/Guardrail → Policy Center
+- Filter by severity (High / Medium / Low) and status (Open / Resolved / Dismissed)
 
 ### ⭐ Core Watchlist
-Priority coverage list ranked by the latest Aureus signal. Real-time confidence bars, price change, and per-symbol alert arming.
+14 pre-seeded priority symbols ranked by Aureus signal with live confidence bars.
+
+- **In-app Add Symbol modal** — enter any ticker; server auto-generates price, confidence, and signal
+- Alert toggle per symbol (armed/muted) — persisted to database
+- Sort by Signal, % Change, or alphabetical
+- Click any symbol to navigate to its Stock Detail page
 
 ### 📅 Earnings Radar
-Upcoming catalyst calendar ranked by implied volatility and portfolio relevance. Per-event alert toggle with 7 / 30 / 90-day horizon selector.
+Upcoming catalyst calendar ranked by implied volatility and portfolio relevance.
+
+- 9 pre-seeded events across NVDA, MU, TSLA, MSFT, GOOGL, FOMC, and others
+- **Filter drawer** — filter by Impact level (High / Medium) and Alert status (Armed only)
+- **7 / 30 / 90-day horizon selector** — dynamically filters the catalyst list
+- **Add Custom Catalyst modal** — add any ticker with timing, impact, implied move, and date
+- Per-event alert toggle; armed count reflects in the top metric card
+- Next catalyst derived dynamically from the first DB entry
 
 ### 🔍 Stock Detail
-Deep-dive workspace per ticker with a dynamic intraday sparkline, tabbed thesis / evidence / risk panels fed from the latest agent run, and source-score breakdown.
+Deep-dive workspace per ticker with data-driven visualisation.
+
+- **Dynamic intraday sparkline** — rendered from a `priceSeries` array via inline SVG polyline
+- **Tabbed content** — Thesis (filing summary), Evidence (agent signals), Risk notes (risk factors)
+- **Add to Watchlist / toggle** — pre-checks existing watchlist status on load
+- **"Run fresh analysis"** — navigates to `/?ticker=TICKER` and auto-triggers the 5-agent pipeline
 
 ### 📁 Analysis History
-Full replay log of every prior agent run — searchable by ticker or decision. Click **Replay** to jump straight to the stock detail for that instrument.
+Full archive of 15 pre-seeded agent runs, fully searchable and filterable.
+
+- Filter by Decision (Approved / Rejected / Pending) and Signal (Bullish / Constructive / Mixed / Bearish)
+- Sort by newest, confidence high→low, or confidence low→high
+- **View** — opens Stock Detail for that instrument
+- **Re-run** — navigates to `/?ticker=TICKER` to launch a fresh 5-agent analysis
+
+---
+
+## ✦ Synthetic Data Layer
+
+The database is seeded automatically on first boot with realistic financial data:
+
+| Table | Entries | Coverage |
+|---|---|---|
+| `holdings` | 13 positions | NVDA, MSFT, AMZN, META, GOOGL, LLY, JPM, AMD, AVGO, TSM, ASML, CAT, CASH |
+| `watchlist` | 14 symbols | All major holdings + AAPL, TSLA, PLTR |
+| `catalysts` | 9 events | NVDA, MU, NKE, TSM, CPI, MSFT, GOOGL, FOMC, AMZN |
+| `analyses` | 15 runs | Full reasoning records with VaR, Sharpe, thesis summaries |
+| `exceptions` | 6 items | Mix of High / Medium / Low severity across all owners |
+| `audit_events` | 15 records | SHA-256 hashed entries for all agent types |
+| `policies` | 1 active set | Position limit 25%, VaR threshold 2.5%, hard stop enabled |
 
 ---
 
@@ -99,14 +161,15 @@ Full replay log of every prior agent run — searchable by ticker or decision. C
 | **Frontend** | React 19 + Vite 7 + TypeScript | Fast HMR, type-safe component tree |
 | **Styling** | Vanilla CSS + Tailwind CSS v4 | Zero-runtime, design-system tokens |
 | **Routing** | Wouter | Lightweight client-side SPA routing |
-| **Charts** | Recharts | Composable React chart primitives |
+| **Charts** | Recharts + inline SVG | Composable chart primitives + custom sparklines |
 | **Backend** | Node.js (ESM) + Express 4 | Familiar, fast, minimal overhead |
-| **Database** | `node:sqlite` (built-in, `DatabaseSync`) | Zero-dependency, transactional SQLite — no external DB process needed |
+| **Database** | `node:sqlite` (built-in `DatabaseSync`) | Zero-dependency, transactional SQLite — no external DB process |
 | **Streaming** | Server-Sent Events (SSE) | Real-time agent thought streaming without WebSocket complexity |
+| **Toast** | Sonner | Non-blocking feedback for every user action |
 | **Package manager** | pnpm | Fast, strict, disk-efficient |
 | **Containerisation** | Docker + Docker Compose | One-command production deployment |
 
-> **Why `node:sqlite`?** It ships with Node.js ≥ 22 — no native bindings, no `better-sqlite3` compilation step, full synchronous transaction support, and zero extra dependencies. Perfect for a self-contained Intelligence OS.
+> **Why `node:sqlite`?** Ships with Node.js ≥ 22 — no native bindings, no `better-sqlite3` compilation step, full synchronous transaction support, and zero extra dependencies.
 
 ---
 
@@ -121,35 +184,34 @@ aureus-ai-command-center/
 │       ├── lib/
 │       │   └── api.ts          # Type-safe fetch + SSE client
 │       ├── components/
-│       │   ├── WorkspaceLayout.tsx
-│       │   └── ui/             # Radix UI primitives
+│       │   └── WorkspaceLayout.tsx
 │       └── pages/
-│           ├── Home.tsx        # Command Center + swarm stream
-│           ├── Portfolio.tsx
-│           ├── RiskMatrix.tsx
-│           ├── AuditTrail.tsx
-│           ├── PolicyCenter.tsx
-│           ├── Exceptions.tsx
-│           ├── CoreWatchlist.tsx
-│           ├── EarningsRadar.tsx
-│           ├── StockDetail.tsx
-│           └── AnalysisHistory.tsx
+│           ├── Home.tsx        # Command Center + swarm stream + URL param listener
+│           ├── Portfolio.tsx   # Holdings, Add modal, period chart, CSV export
+│           ├── RiskMatrix.tsx  # Stress Lab + simulation outcome card
+│           ├── AuditTrail.tsx  # Hashed event log + agent filter + CSV
+│           ├── PolicyCenter.tsx# Live health score + policy sliders
+│           ├── Exceptions.tsx  # Resolve / Dismiss / Investigate triage
+│           ├── CoreWatchlist.tsx # Add Symbol modal + alert toggle
+│           ├── EarningsRadar.tsx # Filter drawer + Add Catalyst modal
+│           ├── StockDetail.tsx # Sparkline + tabs + Run fresh analysis
+│           └── AnalysisHistory.tsx # View + Re-run + filters
 ├── server/                     # Express API
-│   ├── index.ts                # Entry — mounts Vite in dev, serves dist/ in prod
+│   ├── index.ts                # Entry point
 │   ├── db/
 │   │   ├── schema.sql          # Relational schema (auto-applied on boot)
-│   │   └── index.ts            # DB initialiser + seed data
-│   ├── routes/                 # One file per feature domain
+│   │   └── index.ts            # DB initialiser + rich synthetic seed data
+│   ├── routes/
 │   │   ├── swarm.ts            # SSE stream + HITL execute
-│   │   ├── portfolio.ts
-│   │   ├── risk.ts
-│   │   ├── audit.ts
-│   │   ├── history.ts
-│   │   ├── policies.ts
-│   │   ├── exceptions.ts
-│   │   ├── stock.ts
-│   │   ├── watchlist.ts
-│   │   └── earnings.ts
+│   │   ├── portfolio.ts        # Holdings with dynamic return_pct
+│   │   ├── risk.ts             # VaR + scenario stress test
+│   │   ├── audit.ts            # Immutable event log
+│   │   ├── history.ts          # Analysis run archive
+│   │   ├── policies.ts         # Guardrail config
+│   │   ├── exceptions.ts       # Resolve + dismiss endpoints
+│   │   ├── stock.ts            # Per-ticker detail
+│   │   ├── watchlist.ts        # Add + toggle alert
+│   │   └── earnings.ts         # Add catalyst + toggle alert
 │   └── services/
 │       ├── agentSwarm.ts       # 5-agent pipeline orchestrator
 │       ├── mathEngine.ts       # Deterministic VaR / Sharpe / drawdown
@@ -158,6 +220,7 @@ aureus-ai-command-center/
 ├── shared/                     # Shared TS types
 ├── Dockerfile                  # Multi-stage production image
 ├── docker-compose.yml          # SQLite volume + health check
+├── render.yaml                 # Render.com deployment config
 └── package.json
 ```
 
@@ -183,30 +246,22 @@ pnpm install
 pnpm dev
 ```
 
-Open **http://localhost:3000** — the database is seeded automatically on first boot.
+Open **http://localhost:3000** — the database seeds automatically on first boot with 13 holdings, 15 analyses, 14 watchlist symbols, 9 earnings catalysts, 6 exceptions, and 15 audit events.
 
 ### Production (Docker)
 
 ```bash
-# Build and run
-docker compose up -d
-
-# Logs
-docker compose logs -f aureus
-
-# Stop
-docker compose down
+docker compose up -d        # Build and run
+docker compose logs -f      # Stream logs
+docker compose down         # Stop
 ```
 
-The SQLite database is stored in a named Docker volume (`aureus-data`) and persists across container restarts.
+The SQLite database is stored in a named Docker volume (`aureus-data`) and persists across restarts.
 
 ### Production (manual)
 
 ```bash
-# Build Vite frontend + esbuild server bundle
-pnpm build
-
-# Run
+pnpm build                            # Build Vite + esbuild server
 NODE_ENV=production node dist/index.js
 ```
 
@@ -221,37 +276,24 @@ All endpoints are under `/api/`.
 | `GET` | `/api/health` | Server status + version |
 | `GET` | `/api/swarm/stream?ticker=NVDA` | SSE — live agent thought stream |
 | `POST` | `/api/swarm/execute` | Sign + record a trade decision (approve/reject) |
-| `GET` | `/api/portfolio` | Full portfolio with holdings + chart data |
-| `POST` | `/api/portfolio/holdings` | Add a new holding |
+| `GET` | `/api/portfolio` | Holdings with dynamic `return_pct` + chart data |
+| `POST` | `/api/portfolio/holdings` | Add or rebalance a position |
 | `GET` | `/api/risk` | VaR, alerts, stress loss, risk dimensions |
 | `POST` | `/api/risk/scenario` | Run a stress scenario |
-| `GET` | `/api/audit` | Immutable audit log (filterable) |
-| `GET` | `/api/history` | Analysis run archive (searchable) |
+| `GET` | `/api/audit` | Immutable audit log (filterable, searchable) |
+| `GET` | `/api/history` | Analysis run archive |
 | `GET` | `/api/policies` | Current guardrail policy set |
 | `POST` | `/api/policies` | Save updated policy set |
 | `GET` | `/api/exceptions` | Open exception triage queue |
-| `POST` | `/api/exceptions/:id/resolve` | Mark exception resolved |
+| `POST` | `/api/exceptions/:id/resolve` | Mark resolved + write audit event |
+| `POST` | `/api/exceptions/:id/dismiss` | Mark dismissed + write audit event |
 | `GET` | `/api/stock/:ticker` | Deep-dive data for one instrument |
 | `GET` | `/api/watchlist` | Watchlist with confidence signals |
+| `POST` | `/api/watchlist/add` | Add a new symbol (auto-generates price/confidence) |
 | `POST` | `/api/watchlist/toggle` | Arm / mute a watchlist alert |
-| `GET` | `/api/earnings` | Upcoming earnings catalysts |
+| `GET` | `/api/earnings` | Upcoming earnings catalysts (dynamic next catalyst) |
+| `POST` | `/api/earnings/add` | Add a custom catalyst event |
 | `POST` | `/api/earnings/toggle` | Arm / mute an earnings alert |
-
----
-
-## ✦ Database Schema
-
-```sql
-portfolio_holdings   -- position weights, shares, cost basis, sector
-watchlist            -- tracked symbols, confidence, signal, alert_armed
-earnings_catalysts   -- upcoming events, implied move, tone, alert_armed
-audit_events         -- immutable log with SHA-256 hash + signed_by
-exceptions           -- policy breach triage queue
-analysis_history     -- full record of every agent run
-policies             -- persisted guardrail configuration
-```
-
-The schema is applied automatically via `server/db/schema.sql` on every server boot (idempotent — uses `CREATE TABLE IF NOT EXISTS`).
 
 ---
 
@@ -278,6 +320,7 @@ This makes the audit trail **tamper-evident** — any post-hoc modification woul
 |---|---|---|
 | `NODE_ENV` | `development` | Set to `production` to serve built static files |
 | `PORT` | `3000` | HTTP server port |
+| `SQLITE_DB_PATH` | `.data/aureus.db` | Override the SQLite file path (for persistent volume mounts) |
 | `VITE_ANALYTICS_ENDPOINT` | *(unset)* | Optional Umami analytics URL |
 | `VITE_ANALYTICS_WEBSITE_ID` | *(unset)* | Optional Umami site ID |
 
@@ -286,6 +329,24 @@ No external API keys are required — all market data and agent logic is self-co
 ---
 
 ## ✦ Deployment
+
+### Render *(current live deployment)*
+
+The project ships with `render.yaml` for one-click deployment.
+
+1. Fork / push to GitHub
+2. Connect the repo in the [Render dashboard](https://dashboard.render.com)
+3. Render auto-detects `render.yaml` — build: `pnpm build`, start: `node dist/index.js`
+4. Set `NODE_ENV=production` in the environment tab
+5. Mount a **Persistent Disk** at `/app/.data` to preserve the SQLite database across deploys
+
+> Every `git push origin main` automatically triggers a new deploy on Render.
+
+### Docker
+
+```bash
+docker compose up -d
+```
 
 ### Fly.io
 
@@ -296,9 +357,9 @@ fly volumes create aureus_data --size 1
 fly deploy
 ```
 
-### Railway / Render
+### Railway
 
-Set `NODE_ENV=production`, point to the repo root, and set the start command to `node dist/index.js`. Mount a persistent volume at `/app/.data`.
+Set `NODE_ENV=production`, build command `pnpm build`, start command `node dist/index.js`. Mount a persistent volume at `/app/.data`.
 
 ---
 
