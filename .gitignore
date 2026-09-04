@@ -106,9 +106,6 @@ temp/
 *.sqlite3
 .data/
 
-# Webdev artifacts (checkpoint zips, migrations, etc.)
+# Webdev artifacts
 .webdev/
-
-# Manus version file (auto-generated, not part of source)
-client/public/__manus__/version.json
 .project-config.json

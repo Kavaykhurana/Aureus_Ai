@@ -32,31 +32,33 @@ router.get("/", (_req: Request, res: Response) => {
  */
 router.post("/scenario", (req: Request, res: Response) => {
   const { scenario = "Base case", threshold = 2.5 } = req.body;
+  const cleanScenario = typeof scenario === "string" ? scenario.slice(0, 50) : "Base case";
+  const cleanThreshold = Number.isFinite(Number(threshold)) ? Math.max(0.1, Math.min(50, Number(threshold))) : 2.5;
 
   let drawdown = 0;
-  switch (scenario) {
+  switch (cleanScenario) {
     case "Rate shock":
-      drawdown = threshold + 2.8;
+      drawdown = cleanThreshold + 2.8;
       break;
     case "Tech selloff":
-      drawdown = threshold + 4.6;
+      drawdown = cleanThreshold + 4.6;
       break;
     case "Liquidity event":
-      drawdown = threshold + 3.1;
+      drawdown = cleanThreshold + 3.1;
       break;
     default:
-      drawdown = threshold + 1.2;
+      drawdown = cleanThreshold + 1.2;
       break;
   }
 
-  const opensCheckpoint = drawdown > threshold + 2.0;
+  const opensCheckpoint = drawdown > cleanThreshold + 2.0;
 
   res.json({
-    scenario,
+    scenario: cleanScenario,
     projectedDrawdownPct: Number((-drawdown).toFixed(1)),
-    threshold,
+    threshold: cleanThreshold,
     opensCheckpoint,
-    message: `${scenario} stress test finished with a projected -${drawdown.toFixed(1)}% drawdown.`,
+    message: `${cleanScenario} stress test finished with a projected -${drawdown.toFixed(1)}% drawdown.`,
   });
 });
 

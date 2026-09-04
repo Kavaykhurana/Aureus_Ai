@@ -9,7 +9,8 @@ const router = Router();
  * Returns stock fundamentals, evidence, sentiment metrics, and sparklines.
  */
 router.get("/:ticker", (req: Request, res: Response) => {
-  const sym = req.params.ticker.toUpperCase().trim();
+  const rawTicker = req.params.ticker || "";
+  const sym = rawTicker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10) || "NVDA";
   const quote = MarketDataService.getStockQuote(sym);
   const secData = SecRagService.retrieveFilingInsight(sym);
 

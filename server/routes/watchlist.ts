@@ -48,13 +48,18 @@ router.get("/", (_req: Request, res: Response) => {
  */
 router.post("/toggle", (req: Request, res: Response) => {
   const { ticker } = req.body;
-  if (!ticker) {
-    res.status(400).json({ error: "Ticker required" });
+  if (!ticker || typeof ticker !== "string") {
+    res.status(400).json({ error: "Valid ticker required" });
     return;
   }
 
-  const sym = ticker.toUpperCase();
-  const existing = db.prepare("SELECT alert_armed FROM watchlist WHERE ticker = ?").get() as { alert_armed: number } | undefined;
+  const sym = ticker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10);
+  if (!sym) {
+    res.status(400).json({ error: "Valid ticker symbol required" });
+    return;
+  }
+
+  const existing = db.prepare("SELECT alert_armed FROM watchlist WHERE ticker = ?").get(sym) as { alert_armed: number } | undefined;
 
   const nextState = existing ? (existing.alert_armed === 1 ? 0 : 1) : 1;
   const now = new Date().toISOString();

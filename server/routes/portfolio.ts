@@ -71,22 +71,34 @@ router.get("/", (_req: Request, res: Response) => {
 router.post("/holdings", (req: Request, res: Response) => {
   const { ticker, name, weight, shares, lastPrice, costBasis, sector = "Technology", tone = "green" } = req.body;
 
-  if (!ticker) {
-    res.status(400).json({ error: "Ticker is required" });
+  if (!ticker || typeof ticker !== "string") {
+    res.status(400).json({ error: "Ticker string is required" });
     return;
   }
 
-  const sym = ticker.toUpperCase();
-  const now = new Date().toISOString();
+  const sym = ticker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10);
+  if (!sym) {
+    res.status(400).json({ error: "Valid ticker symbol is required" });
+    return;
+  }
 
-  const existing = db.prepare("SELECT * FROM holdings WHERE ticker = ?").get() as { id: string } | undefined;
+  const cleanWeight = Number.isFinite(Number(weight)) ? Math.max(0, Number(weight)) : 3.0;
+  const cleanShares = Number.isFinite(Number(shares)) ? Math.max(0, Math.round(Number(shares))) : 100;
+  const cleanLastPrice = Number.isFinite(Number(lastPrice)) ? Math.max(0, Number(lastPrice)) : 100.0;
+  const cleanCostBasis = Number.isFinite(Number(costBasis)) ? Math.max(0, Number(costBasis)) : 100.0;
+  const cleanName = typeof name === "string" && name.trim() ? name.trim().slice(0, 80) : `${sym} Corporation`;
+  const cleanSector = typeof sector === "string" ? sector.slice(0, 40) : "Technology";
+  const cleanTone = typeof tone === "string" ? tone.slice(0, 20) : "green";
+
+  const now = new Date().toISOString();
+  const existing = db.prepare("SELECT * FROM holdings WHERE ticker = ?").get(sym) as { id: string } | undefined;
 
   if (existing) {
     db.prepare(`
       UPDATE holdings
       SET weight = ?, shares = ?, last_price = ?, cost_basis = ?, updated_at = ?
       WHERE ticker = ?
-    `).run(Number(weight), Number(shares), Number(lastPrice), Number(costBasis), now, sym);
+    `).run(cleanWeight, cleanShares, cleanLastPrice, cleanCostBasis, now, sym);
   } else {
     db.prepare(`
       INSERT INTO holdings (id, portfolio_id, ticker, name, weight, shares, last_price, cost_basis, return_pct, sector, tone, updated_at)
@@ -95,14 +107,14 @@ router.post("/holdings", (req: Request, res: Response) => {
       crypto.randomUUID(),
       "main-portfolio",
       sym,
-      name || `${sym} Corporation`,
-      Number(weight) || 3.0,
-      Number(shares) || 100,
-      Number(lastPrice) || 100.0,
-      Number(costBasis) || 100.0,
+      cleanName,
+      cleanWeight,
+      cleanShares,
+      cleanLastPrice,
+      cleanCostBasis,
       0.0,
-      sector,
-      tone,
+      cleanSector,
+      cleanTone,
       now
     );
   }

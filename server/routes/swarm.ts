@@ -10,17 +10,28 @@ const router = Router();
  * Server-Sent Events (SSE) thought stream for the 5-agent swarm pipeline.
  */
 router.get("/stream", async (req: Request, res: Response) => {
-  const ticker = (req.query.ticker as string)?.toUpperCase() || "NVDA";
+  const rawTicker = (req.query.ticker as string) || "NVDA";
+  const ticker = rawTicker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10) || "NVDA";
 
   // SSE Response Headers
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // Disable proxy buffering for nginx/render
   res.flushHeaders?.();
 
   let isClosed = false;
+  
+  // Send 15s keep-alive heartbeats to keep proxy connections alive
+  const keepAliveTimer = setInterval(() => {
+    if (!isClosed) {
+      res.write(": keep-alive\n\n");
+    }
+  }, 15000);
+
   req.on("close", () => {
     isClosed = true;
+    clearInterval(keepAliveTimer);
   });
 
   const sendEvent = (event: string, data: unknown) => {
@@ -103,19 +114,37 @@ router.get("/stream", async (req: Request, res: Response) => {
  * Human-in-the-Loop decision submission (approve or reject trade proposal).
  */
 router.post("/execute", (req: Request, res: Response) => {
-  const { ticker, decision, orderNotional = 25000, targetAllocation = "3.5%", notes } = req.body;
+  const { ticker: rawTicker, decision, orderNotional: rawNotional = 25000, targetAllocation = "3.5%", notes: rawNotes } = req.body;
 
-  if (!ticker || !decision) {
-    res.status(400).json({ error: "Missing ticker or decision in request payload" });
+  if (!rawTicker || typeof rawTicker !== "string" || !decision || typeof decision !== "string") {
+    res.status(400).json({ error: "Missing or invalid ticker or decision in request payload" });
     return;
   }
+
+  const ticker = rawTicker.toUpperCase().replace(/[^A-Z0-9.-]/g, "").slice(0, 10);
+  if (!ticker) {
+    res.status(400).json({ error: "Invalid ticker symbol format" });
+    return;
+  }
+
+  if (decision !== "approved" && decision !== "rejected") {
+    res.status(400).json({ error: "Invalid decision value: must be 'approved' or 'rejected'" });
+    return;
+  }
+
+  const parsedNotional = Number(rawNotional);
+  const orderNotional = Number.isFinite(parsedNotional) && parsedNotional > 0
+    ? Math.min(Math.max(parsedNotional, 100), 50000000)
+    : 25000;
+
+  const notes = typeof rawNotes === "string" ? rawNotes.trim().slice(0, 300) : "";
 
   const approved = decision === "approved";
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}:${now.getSeconds().toString().padStart(2, "0")}`;
 
   const message = approved
-    ? `${ticker} order approved ($${Number(orderNotional).toLocaleString()}) · execution confirmed`
+    ? `${ticker} order approved ($${orderNotional.toLocaleString()}) · execution confirmed`
     : `${ticker} order rejected · execution blocked${notes ? ` (${notes})` : ""}`;
 
   const hash = generateEventHash(timeStr, "HUMAN", message);
@@ -140,7 +169,7 @@ router.post("/execute", (req: Request, res: Response) => {
   // 2. If approved, update portfolio holdings and cash
   if (approved) {
     const sym = ticker.toUpperCase();
-    const existing = db.prepare("SELECT * FROM holdings WHERE ticker = ?").get() as {
+    const existing = db.prepare("SELECT * FROM holdings WHERE ticker = ?").get(sym) as {
       id: string;
       shares: number;
       weight: number;

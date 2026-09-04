@@ -24,22 +24,75 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const server = createServer(app);
+  const isProd = process.env.NODE_ENV === "production";
 
-  // Body parsers
-  app.use(express.json());
-  app.use(express.urlencoded({ extended: true }));
+  // Disable server technology fingerprinting
+  app.disable("x-powered-by");
 
-  // CORS & Security headers
+  // Trust proxy for correct client IP resolution behind reverse proxies (Render, Cloudflare)
+  app.set("trust proxy", 1);
+
+  // OWASP Recommended Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "0");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    next();
+  });
+
+  // CORS Configuration
+  const allowedOrigin = process.env.CORS_ORIGIN || "*";
   app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     if (req.method === "OPTIONS") {
-      res.sendStatus(200);
+      res.sendStatus(204);
       return;
     }
     next();
   });
+
+  // Body parsers with payload size limits to prevent DoS
+  app.use(express.json({ limit: "500kb" }));
+  app.use(express.urlencoded({ extended: true, limit: "500kb" }));
+
+  // In-memory rate limiting for /api endpoints (200 req / minute per IP)
+  const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+  app.use("/api", (req, res, next) => {
+    if (req.path === "/health") return next();
+
+    const ip = req.ip || req.socket.remoteAddress || "unknown";
+    const now = Date.now();
+    const windowMs = 60 * 1000;
+    const maxRequests = 200;
+
+    let record = rateLimitMap.get(ip);
+    if (!record || now > record.resetTime) {
+      record = { count: 1, resetTime: now + windowMs };
+      rateLimitMap.set(ip, record);
+    } else {
+      record.count++;
+      if (record.count > maxRequests) {
+        res.status(429).json({
+          error: "Too many requests. Please try again shortly.",
+          retryAfterSeconds: Math.ceil((record.resetTime - now) / 1000),
+        });
+        return;
+      }
+    }
+    next();
+  });
+
+  // Clean memory cleanup for rate limiting map every 10 minutes
+  setInterval(() => {
+    const now = Date.now();
+    rateLimitMap.forEach((record, ip) => {
+      if (now > record.resetTime) rateLimitMap.delete(ip);
+    });
+  }, 10 * 60 * 1000).unref();
 
   // Health check
   app.get("/api/health", (_req, res) => {
@@ -63,9 +116,12 @@ async function startServer() {
   app.use("/api/watchlist", watchlistRoutes);
   app.use("/api/earnings", earningsRoutes);
 
-  // Development vs Production serving
-  const isProd = process.env.NODE_ENV === "production";
+  // Catch-all 404 for unhandled API endpoints
+  app.all("/api/*", (_req, res) => {
+    res.status(404).json({ error: "Endpoint not found", status: 404 });
+  });
 
+  // Development vs Production serving
   if (!isProd) {
     // In dev mode, attach Vite dev server middleware for instant HMR and compilation
     const { createServer: createViteServer } = await import("vite");
@@ -83,6 +139,15 @@ async function startServer() {
       res.sendFile(path.join(staticPath, "index.html"));
     });
   }
+
+  // Centralized Error Handling Middleware (prevents leaking internal stack traces)
+  app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    console.error("[Aureus AI Server Error]", err);
+    res.status(err.status || 500).json({
+      error: isProd ? "Internal server error" : (err.message || "An unexpected error occurred"),
+      status: "error",
+    });
+  });
 
   const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 

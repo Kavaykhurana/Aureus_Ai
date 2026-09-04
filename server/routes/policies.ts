@@ -44,13 +44,19 @@ router.post("/", (req: Request, res: Response) => {
 
   const now = new Date().toISOString();
 
+  const rawLimit = Number(positionLimit);
+  const rawVaR = Number(approvalVaR);
+
+  const cleanLimit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1.0), 100.0) : 25.0;
+  const cleanVaR = Number.isFinite(rawVaR) ? Math.min(Math.max(rawVaR, 0.1), 50.0) : 2.5;
+
   db.prepare(`
     UPDATE policies
     SET position_limit = ?, approval_var_threshold = ?, compliance_hard_stop = ?, two_person_approval = ?, updated_at = ?
     WHERE id = 'active-policy'
   `).run(
-    Number(positionLimit) || 25.0,
-    Number(approvalVaR) || 2.5,
+    cleanLimit,
+    cleanVaR,
     complianceHardStop !== undefined ? (complianceHardStop ? 1 : 0) : 1,
     twoPersonApproval !== undefined ? (twoPersonApproval ? 1 : 0) : 0,
     now

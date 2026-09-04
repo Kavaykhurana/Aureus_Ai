@@ -41,7 +41,13 @@ router.get("/", (_req: Request, res: Response) => {
  * Marks an exception as resolved and records an audit trail event.
  */
 router.post("/:id/resolve", (req: Request, res: Response) => {
-  const { id } = req.params;
+  const rawId = req.params.id || "";
+  const id = rawId.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 30);
+  if (!id) {
+    res.status(400).json({ error: "Invalid exception ID format" });
+    return;
+  }
+
   const now = new Date();
   const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
 

@@ -7,7 +7,7 @@
 **An inspectable multi-agent financial intelligence OS.**  
 Five AI agents collaborate in real time to analyse equities, model risk, enforce compliance, and propose trade decisions — with a mandatory human-in-the-loop checkpoint before any execution.
 
-[![Live Demo](https://img.shields.io/badge/Live_Demo-Online-00C7B7?style=for-the-badge&logo=cloudflare&logoColor=white)](https://asn-appears-revised-creativity.trycloudflare.com)
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Online-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://aureus-ai-command-center.onrender.com)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Kavaykhurana/Aureus_Ai)
 
 <br/>
@@ -19,7 +19,7 @@ Five AI agents collaborate in real time to analyse equities, model risk, enforce
 [![Vite](https://img.shields.io/badge/Vite-7-646cff?style=flat-square&logo=vite)](https://vitejs.dev/)
 [![License](https://img.shields.io/badge/License-MIT-22c55e?style=flat-square)](LICENSE)
 
-> 🌐 **Live Public Deployment**: [asn-appears-revised-creativity.trycloudflare.com](https://asn-appears-revised-creativity.trycloudflare.com)
+> 🌐 **Live Public Deployment**: [aureus-ai-command-center.onrender.com](https://aureus-ai-command-center.onrender.com)
 
 </div>
 
