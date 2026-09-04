@@ -166,7 +166,7 @@ export default function RiskMatrix() {
                   </div>
                   <div className="risk-bar">
                     <div
-                      className={`risk-bar-fill ${toneClass[tone] ?? "risk-low"}`}
+                      className={`risk-bar-fill ${barWidth[tone] ? tone : "risk-low"}`}
                       style={{ width: barWidth[tone] ?? "30%" }}
                     />
                   </div>
