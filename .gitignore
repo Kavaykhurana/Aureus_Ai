@@ -109,3 +109,4 @@ temp/
 # Webdev artifacts
 .webdev/
 .project-config.json
+.manus-logs/
