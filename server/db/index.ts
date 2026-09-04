@@ -18,6 +18,9 @@ export const db = new DatabaseSync(dbPath);
 // Enable WAL mode & foreign keys for performance and data integrity
 db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
+db.exec("PRAGMA synchronous = NORMAL;");   // Durable enough with WAL; faster than FULL
+db.exec("PRAGMA cache_size = -32000;");    // 32MB page cache
+db.exec("PRAGMA temp_store = MEMORY;");    // Use memory for temp tables
 
 // Initialize Schema
 let schemaPath = path.join(__dirname, "schema.sql");

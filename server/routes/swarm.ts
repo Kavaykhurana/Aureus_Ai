@@ -102,9 +102,13 @@ router.get("/stream", async (req: Request, res: Response) => {
     }
 
     sendEvent("PIPELINE_COMPLETE", result);
-    res.end();
   } catch (error) {
-    sendEvent("ERROR", { error: String(error) });
+    const isProd = process.env.NODE_ENV === "production";
+    const message = isProd ? "Analysis pipeline encountered an error. Please try again." : String(error);
+    sendEvent("ERROR", { error: message });
+  } finally {
+    isClosed = true;
+    clearInterval(keepAliveTimer);
     res.end();
   }
 });

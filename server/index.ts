@@ -35,19 +35,41 @@ async function startServer() {
   // OWASP Recommended Security Headers
   app.use((_req, res, next) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("X-Frame-Options", "DENY");
     res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
     res.setHeader("X-XSS-Protection", "0");
     res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+    if (isProd) {
+      res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    }
+    // Content-Security-Policy: restrict resource loading to same-origin & trusted CDNs
+    res.setHeader(
+      "Content-Security-Policy",
+      [
+        "default-src 'self'",
+        "script-src 'self' 'unsafe-inline'",        // unsafe-inline needed for Vite HMR in dev
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+        "font-src 'self' https://fonts.gstatic.com",
+        "img-src 'self' data: blob:",
+        "connect-src 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'self'",
+        "form-action 'self'",
+      ].join("; ")
+    );
     next();
   });
 
-  // CORS Configuration
-  const allowedOrigin = process.env.CORS_ORIGIN || "*";
+  // CORS Configuration — wildcard only permitted in development
+  const allowedOrigin = process.env.CORS_ORIGIN || (isProd ? "https://aureus-ai-command-center.onrender.com" : "*");
   app.use((req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
-    res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    const origin = req.headers.origin;
+    if (allowedOrigin === "*" || origin === allowedOrigin) {
+      res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
+    }
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Vary", "Origin");
     if (req.method === "OPTIONS") {
       res.sendStatus(204);
       return;
@@ -76,9 +98,11 @@ async function startServer() {
     } else {
       record.count++;
       if (record.count > maxRequests) {
+        const retryAfter = Math.ceil((record.resetTime - now) / 1000);
+        res.setHeader("Retry-After", String(retryAfter));
         res.status(429).json({
           error: "Too many requests. Please try again shortly.",
-          retryAfterSeconds: Math.ceil((record.resetTime - now) / 1000),
+          retryAfterSeconds: retryAfter,
         });
         return;
       }

@@ -361,9 +361,18 @@ export const api = {
     ticker: string,
     onThought: (thought: SwarmThought) => void,
     onComplete: (result: SwarmResult) => void,
-    onError: (err: unknown) => void
+    onError?: (err: unknown) => void
   ): () => void {
     const es = new EventSource(`/api/swarm/stream?ticker=${encodeURIComponent(ticker)}`);
+
+    const handleError = (err: unknown) => {
+      if (typeof onError === "function") {
+        onError(err);
+      } else {
+        console.warn("[Aureus AI] Swarm SSE stream error:", err);
+      }
+      es.close();
+    };
 
     es.addEventListener("AGENT_THOUGHT", (evt) => {
       try {
@@ -385,13 +394,11 @@ export const api = {
     });
 
     es.addEventListener("ERROR", (evt) => {
-      onError(evt);
-      es.close();
+      handleError(evt);
     });
 
     es.onerror = (err) => {
-      onError(err);
-      es.close();
+      handleError(err);
     };
 
     return () => {

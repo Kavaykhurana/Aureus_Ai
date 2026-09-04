@@ -8,12 +8,13 @@ const router = Router();
  * Returns historical analysis runs with search and filter.
  */
 router.get("/", (req: Request, res: Response) => {
-  const query = (req.query.q as string) || "";
+  const query = typeof req.query.q === "string" ? req.query.q.slice(0, 200) : "";
 
   const rows = db.prepare(`
     SELECT id, ticker, timestamp, signal, decision, confidence, var_95, sharpe_ratio, compliance_status, proposed_action, target_allocation, thesis_summary, tone, created_at
     FROM analyses
     ORDER BY created_at DESC
+    LIMIT 1000
   `).all() as Array<{
     id: string;
     ticker: string;

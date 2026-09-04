@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   ArrowDownRight,
@@ -260,6 +260,13 @@ export default function Home() {
   const [lastRun, setLastRun] = useState("—");
   const [chartRange, setChartRange] = useState("3M");
   const [feedFilter, setFeedFilter] = useState("All agents");
+  const streamCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      streamCleanupRef.current?.();
+    };
+  }, []);
 
   const completedCount = Object.values(statuses).filter((status) => status === "completed" || status === "flagged").length;
   const progress = Math.round((completedCount / agents.length) * 100);
@@ -305,8 +312,9 @@ export default function Home() {
     ].slice(0, 10));
 
     toast.success(`Analyzing ${nextTicker}`, { description: "The agent swarm is now running live." });
-
-    api.connectSwarmStream(
+ 
+    streamCleanupRef.current?.();
+    streamCleanupRef.current = api.connectSwarmStream(
       nextTicker,
       (thought: SwarmThought) => {
         const agentKey = agentIdMap[thought.agent] || thought.agent.toLowerCase();
