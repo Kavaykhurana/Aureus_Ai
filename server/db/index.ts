@@ -20,7 +20,15 @@ db.exec("PRAGMA journal_mode = WAL;");
 db.exec("PRAGMA foreign_keys = ON;");
 
 // Initialize Schema
-const schemaPath = path.join(__dirname, "schema.sql");
+let schemaPath = path.join(__dirname, "schema.sql");
+if (!fs.existsSync(schemaPath)) {
+  // Check if running from dist/
+  schemaPath = path.resolve(__dirname, "../server/db/schema.sql");
+}
+if (!fs.existsSync(schemaPath)) {
+  // Fallback check current working directory
+  schemaPath = path.resolve(process.cwd(), "server/db/schema.sql");
+}
 const schemaSql = fs.readFileSync(schemaPath, "utf-8");
 db.exec(schemaSql);
 

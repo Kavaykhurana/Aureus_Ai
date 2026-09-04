@@ -31,8 +31,9 @@ COPY patches/ ./patches/
 
 RUN pnpm install --frozen-lockfile --prod
 
-# Copy compiled server + static frontend
+# Copy compiled server + static frontend + database schema
 COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/server/db/schema.sql ./server/db/schema.sql
 
 # Persist the SQLite database file across restarts
 VOLUME ["/app/.data"]
